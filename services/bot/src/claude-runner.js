@@ -8,7 +8,7 @@ const CLAUDE_BIN = process.env.CLAUDE_BIN || 'claude';
 const SUBSCRIPTION_MODE = (process.env.CLAUDE_SUBSCRIPTION_MODE || '').toLowerCase() === 'true';
 const DRY_RUN = process.env.DRY_RUN === 'true';
 
-const AUTH_PATTERNS       = ['unauthenticated', 'not logged in', 'login required', '401', 'unauthorized', 'authentication failed', 'invalid credentials', 'oauth'];
+const AUTH_PATTERNS       = ['unauthenticated', 'not logged in', 'login required', '401', 'unauthorized', 'authentication failed', 'invalid credentials', 'oauth', 'configuration file not found', 'not authenticated'];
 const RATE_LIMIT_PATTERNS = ['rate limit', 'quota exceeded', 'overloaded', '529', 'usage limit', 'too many requests'];
 
 function classifyStderr(stderr) {
