@@ -41,13 +41,16 @@ function spawnClaude(prompt, cwd, { budgetUsd, tools, model, useApiKey }) {
     });
 
     let stderrBuf = '';
-    proc.stdout.on('data', chunk => process.stdout.write(chunk));
+    let stdoutLen = 0;
+    proc.stdout.on('data', chunk => { process.stdout.write(chunk); stdoutLen += chunk.length; });
     proc.stderr.on('data', chunk => {
       process.stderr.write(chunk);
       stderrBuf += chunk.toString();
     });
     proc.on('error', reject);
-    proc.on('close', code => resolve({ ok: code === 0, stderr: stderrBuf }));
+    // Claude exits 0 but produces no stdout when auth fails silently (expired session,
+    // missing config) — treat empty stdout as a failure so the caller can fall back.
+    proc.on('close', code => resolve({ ok: code === 0 && stdoutLen > 0, stderr: stderrBuf }));
   });
 }
 
