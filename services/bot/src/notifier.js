@@ -97,10 +97,10 @@ async function notifyAuthExpired() {
 
   if (!DISCORD_WEBHOOK_URL) return;
 
-  const title = '🔐 Research-bot: Claude auth expired';
+  const title = '🔐 rockybot: Claude auth expired';
   const description =
     'Subscription billing has lapsed. Falling back to API key for now.\n\n' +
-    '**To restore:** SSH to dockercompute and run:\n```\nclaude login\n```';
+    '**To restore:** Run `claude login` on the Docker host, then restart the bot container.';
 
   await sendDiscord(title, description, COLOR_WARN)
     .catch(e => logger.warn(`Discord auth notify failed: ${e.message}`));
