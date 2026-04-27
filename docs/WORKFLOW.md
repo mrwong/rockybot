@@ -31,6 +31,10 @@ Obsidian syncs the new pages to your devices
 
 > **Why move the seed file early?** Obsidian Sync can conflict-resolve a file back to `status: pending` while Claude is writing output. Moving the seed out of `inbox/` before Claude starts means Obsidian no longer owns that document during processing.
 
+**What happens after Claude writes the new pages:**
+
+Claude doesn't stop at creating the new folder. It runs a final backlink pass — the **Karpathy ingest pass** — where it re-reads the existing research tree and updates 5–10 related pages to reference the new topic. This is the mechanic that makes the wiki compound: new knowledge propagates backward into what already exists, not just forward into new pages. Over time the graph gets denser and more navigable with each ingest, rather than growing as a collection of isolated documents. See [README.md](../README.md) for more on the inspiration behind this.
+
 **Writing a request:**
 
 Use the **Research Request** Obsidian template (`Cmd/Ctrl+P` → Templates → Research Request), or copy `research/inbox/example-research-request.md`.

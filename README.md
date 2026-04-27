@@ -18,6 +18,18 @@ You write a research request → research/inbox/my-topic.md
 
 ---
 
+## Inspiration: the Karpathy method
+
+rockybot is built around an idea [Andrej Karpathy](https://karpathy.ai/) has articulated about personal knowledge bases: a wiki only compounds in value when new knowledge propagates *backward* into what already exists, not just forward into new pages.
+
+Most note-taking workflows create isolated documents. You research something, write it up, and move on. The old notes never learn about the new ones. Over time you get a collection of disconnected pages instead of a knowledge graph.
+
+The Karpathy method flips this: every time you ingest a new topic, you also update 5–10 existing pages to reference it. New nodes reach backward and attach to the existing graph. Each ingest makes the whole wiki denser and more navigable — the value of the knowledge base compounds with each addition rather than just accumulating.
+
+rockybot operationalizes this as the **Karpathy ingest pass** — the final step of every research run. After Claude writes new pages, it re-reads the existing research tree and backlinks the new topic into every related page it finds. You get the backlinks without the tedium of doing it manually.
+
+---
+
 ## Features
 
 | Watcher | How to trigger | What it does |

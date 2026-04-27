@@ -167,13 +167,12 @@ docker compose -f docker-compose.dev.yml up
 
 ## Publishing a new version
 
-Push to `main` → GitHub Actions builds and pushes `ghcr.io/mrwong/rockybot:latest` (and the bridge/headless images).
-
-For a tagged release:
+Use the release script — it handles CHANGELOG, version bumps, tagging, and prompts before pushing:
 
 ```bash
-git tag v1.1.0
-git push origin v1.1.0
+./scripts/release.sh
 ```
 
-This also publishes `ghcr.io/mrwong/rockybot:1.1.0` and `rockybot:1.1`.
+The script shows commits since the last tag grouped by type, proposes a semver bump (major/minor/patch), asks you to confirm or override, then commits, tags, and optionally pushes. Pushing the tag triggers GitHub Actions to publish Docker images to GHCR.
+
+See `CLAUDE.md` for the full versioning policy, including which commit prefixes map to which bump levels and what counts as a docs-only change (no bump).
