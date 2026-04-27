@@ -22,8 +22,8 @@ jobs:
   integration:
     name: Integration tests
     runs-on: ubuntu-latest
-    # Only run when the API key secret is available (skips on external PRs)
-    if: ${{ secrets.ANTHROPIC_API_KEY_CI != '' }}
+    # Only run when explicitly enabled — set ENABLE_INTEGRATION_TESTS=true in repo variables
+    if: ${{ vars.ENABLE_INTEGRATION_TESTS == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
