@@ -72,10 +72,15 @@ async function runClaude(prompt, cwd, { budgetUsd = '2.00', tools = 'Bash,Edit,R
 
     const errorType = classifyStderr(result.stderr);
     if (errorType === 'auth') {
-      logger.warn('claude-runner: subscription auth expired — notifying Discord, falling back to API key');
+      logger.warn('claude-runner: subscription auth failed — notifying Discord, falling back to API key');
       await notifyAuthExpired();
     } else if (errorType === 'rate-limit') {
       logger.warn('claude-runner: subscription rate-limit hit — falling back to API key');
+    } else if (result.stderr.trim().length === 0) {
+      // Claude exited silently (code 0, no stdout, no stderr) — likely session expired or
+      // config not found. Log a warning before falling back so this is visible in the logs.
+      logger.warn('claude-runner: subscription billing exited silently with no output — session may be expired; run "claude login" on the host to restore subscription billing. Falling back to API key.');
+      await notifyAuthExpired();
     } else {
       throw new Error(`claude (subscription) failed: ${result.stderr.slice(0, 300)}`);
     }
