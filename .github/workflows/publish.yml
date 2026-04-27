@@ -61,23 +61,21 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Notify Discord (success)
-        if: success() && secrets.DISCORD_WEBHOOK_URL != ''
-        uses: sarisia/actions-status-discord@v1
-        with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          status: success
-          title: "rockybot/${{ matrix.service }} published"
-          description: "Image: `${{ matrix.image }}:latest`\nRef: `${{ github.ref_name }}`"
-          color: 0x2ecc71
-          nodetail: true
+        if: success()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          [[ -z "$DISCORD_WEBHOOK_URL" ]] && exit 0
+          curl -s -o /dev/null -X POST "$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "{\"embeds\":[{\"title\":\"✅ rockybot/${{ matrix.service }} published\",\"description\":\"Image: \`${{ matrix.image }}:latest\`\\nRef: \`${{ github.ref_name }}\`\",\"color\":3066993,\"url\":\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}]}"
 
       - name: Notify Discord (failure)
-        if: failure() && secrets.DISCORD_WEBHOOK_URL != ''
-        uses: sarisia/actions-status-discord@v1
-        with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          status: failure
-          title: "rockybot/${{ matrix.service }} build FAILED"
-          description: "Ref: `${{ github.ref_name }}`\nCheck the [Actions run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
-          color: 0xe74c3c
-          nodetail: true
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          [[ -z "$DISCORD_WEBHOOK_URL" ]] && exit 0
+          curl -s -o /dev/null -X POST "$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "{\"embeds\":[{\"title\":\"❌ rockybot/${{ matrix.service }} build FAILED\",\"description\":\"Ref: \`${{ github.ref_name }}\`\",\"color\":15158332,\"url\":\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}]}"
