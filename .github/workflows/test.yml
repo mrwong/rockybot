@@ -1,0 +1,43 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+jobs:
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm install
+      - name: Run unit tests
+        run: npm test
+
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    # Only run when the API key secret is available (skips on external PRs)
+    if: ${{ secrets.ANTHROPIC_API_KEY_CI != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Claude CLI
+        run: npm install -g @anthropic-ai/claude-code
+      - name: Install dependencies
+        run: npm install
+      - name: Run integration tests
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_CI }}
+          CLAUDE_SUBSCRIPTION_MODE: 'false'
+          VAULT_PATH: /tmp/ci-test-vault
+          RESEARCH_BUDGET_USD: '0.10'
+          AMEND_BUDGET_USD: '0.05'
+        run: npm run test:integration

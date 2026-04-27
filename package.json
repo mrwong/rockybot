@@ -1,0 +1,15 @@
+{
+  "name": "rockybot-dev",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Development root — test runner and tooling for rockybot",
+  "scripts": {
+    "test": "jest tests/unit",
+    "test:integration": "jest tests/integration --runInBand"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "fs-extra": "^11.2.0",
+    "glob": "^11.0.0"
+  }
+}

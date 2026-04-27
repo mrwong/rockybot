@@ -1,0 +1,80 @@
+services:
+  # Obsidian Sync daemon — keeps the vault directory in sync with Obsidian Sync cloud
+  # Requires one-time interactive setup: see docs/OBSIDIAN_SETUP.md
+  obsidian-headless:
+    image: ghcr.io/mrwong/rockybot-headless:latest
+    container_name: rockybot-headless
+    restart: unless-stopped
+    volumes:
+      - ./data/vault:/vault
+      - ./data/obsidian-config:/config
+
+  # Obsidian Bridge — watches vault for changes and builds a Quartz static site
+  obsidian-bridge:
+    image: ghcr.io/mrwong/rockybot-bridge:latest
+    container_name: rockybot-bridge
+    restart: unless-stopped
+    environment:
+      - VAULT_PATH=/vault
+      - QUARTZ_OUTPUT=/quartz-output
+      - DOMAIN_NAME=${DOMAIN_NAME:-localhost}
+    volumes:
+      - ./data/vault:/vault
+      - ./data/quartz-output:/quartz-output
+    depends_on:
+      - obsidian-headless
+
+  # Notes Web — nginx serving the Quartz-built static site
+  notes-web:
+    image: nginx:alpine
+    container_name: rockybot-notes
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data/quartz-output:/usr/share/nginx/html:ro
+      - ./services/obsidian-bridge/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - obsidian-bridge
+
+  # rockybot — watches vault inbox and callouts, calls Claude to process them
+  bot:
+    image: ghcr.io/mrwong/rockybot:latest
+    container_name: rockybot
+    restart: unless-stopped
+    environment:
+      - HOME=/home/ubuntu
+      - VAULT_PATH=/vault
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - CLAUDE_SUBSCRIPTION_MODE=${CLAUDE_SUBSCRIPTION_MODE:-false}
+      - DRY_RUN=${DRY_RUN:-false}
+
+      # Polling intervals (seconds)
+      - INBOX_POLL_SECONDS=${INBOX_POLL_SECONDS:-600}
+
+      # Spending caps per watcher invocation
+      - RESEARCH_BUDGET_USD=${RESEARCH_BUDGET_USD:-2.00}
+      - AMEND_BUDGET_USD=${AMEND_BUDGET_USD:-0.50}
+      - EXPAND_BUDGET_USD=${EXPAND_BUDGET_USD:-1.00}
+      - REVISE_BUDGET_USD=${REVISE_BUDGET_USD:-4.00}
+      - LINT_BUDGET_USD=${LINT_BUDGET_USD:-5.00}
+
+      # Claude model selection per watcher
+      - AMEND_MODEL=${AMEND_MODEL:-haiku}
+      - EXPAND_MODEL=${EXPAND_MODEL:-sonnet}
+      - REVISE_MODEL=${REVISE_MODEL:-sonnet}
+      - LINT_MODEL=${LINT_MODEL:-sonnet}
+
+      # Notifications (optional — leave blank to disable)
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
+      - TWILIO_FROM=${TWILIO_FROM:-}
+      - TWILIO_TO=${TWILIO_TO:-}
+    volumes:
+      # Optional: mount Claude subscription session for Pro/Max billing
+      # Comment out if using API key billing only (CLAUDE_SUBSCRIPTION_MODE=false)
+      - ~/.claude:/home/ubuntu/.claude
+      - ./data/vault:/vault
+    depends_on:
+      - obsidian-headless

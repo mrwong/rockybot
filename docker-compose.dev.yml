@@ -1,0 +1,40 @@
+# Local development override — builds from source, uses a temp vault.
+# Runs as a SEPARATE container (rockybot-dev) so it coexists with any live instance.
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml up -d
+#   docker logs -f rockybot-dev
+#
+# Set DRY_RUN=true to test vault scanning without calling Claude:
+#   DRY_RUN=true docker compose -f docker-compose.dev.yml up
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: services/bot/Dockerfile
+    image: rockybot-dev
+    container_name: rockybot-dev
+    environment:
+      - HOME=/home/ubuntu
+      - VAULT_PATH=/dev-vault
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - CLAUDE_SUBSCRIPTION_MODE=false
+      - DRY_RUN=${DRY_RUN:-false}
+      - INBOX_POLL_SECONDS=60
+
+      # Tight budget caps for dev — prevent accidental spend
+      - RESEARCH_BUDGET_USD=0.10
+      - AMEND_BUDGET_USD=0.10
+      - EXPAND_BUDGET_USD=0.10
+      - REVISE_BUDGET_USD=0.25
+      - LINT_BUDGET_USD=0.50
+
+      - AMEND_MODEL=haiku
+      - EXPAND_MODEL=haiku
+      - REVISE_MODEL=haiku
+      - LINT_MODEL=haiku
+    volumes:
+      # Isolated temp vault — never touches the live vault
+      - /tmp/rockybot-dev-vault:/dev-vault
+      # Live-reload source files (no rebuild needed for JS changes)
+      - ./services/bot/src:/app/src
