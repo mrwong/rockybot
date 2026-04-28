@@ -6,6 +6,21 @@ on:
   pull_request:
 
 jobs:
+  image:
+    name: Docker image permissions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build bot image
+        run: docker build -f services/bot/Dockerfile -t rockybot-test .
+      - name: Verify HOME=/home/ubuntu is writable for uid 1000
+        # Claude Code creates lock files and temp files in HOME. If the directory
+        # is owned by root (the pre-1.0.1 behaviour), both subscription billing
+        # and API key mode silently exit 0 with no output.
+        run: |
+          docker run --rm -u 1000:1000 -e HOME=/home/ubuntu rockybot-test \
+            sh -c 'touch /home/ubuntu/.write-test && rm /home/ubuntu/.write-test && echo "PASS"'
+
   unit:
     name: Unit tests
     runs-on: ubuntu-latest

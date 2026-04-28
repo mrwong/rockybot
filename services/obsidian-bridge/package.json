@@ -1,6 +1,6 @@
 {
   "name": "obsidian-bridge",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Watches NFS vault for changes and builds Quartz static site",
   "main": "src/index.js",
   "dependencies": {

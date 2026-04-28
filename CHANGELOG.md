@@ -2,6 +2,11 @@
 
 All notable changes to rockybot are documented here. Version numbers follow [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`. Documentation-only changes do not increment the version.
 
+## [1.0.1] — 2026-04-28
+
+### Fixed
+- Claude auth silent failure when `HOME=/home/ubuntu` is set: the `node:20-alpine` base image runs as uid 1000 (`node`) but `/home/ubuntu` was owned by root, so Claude Code couldn't create lock files or write config updates. Both subscription billing and API key fallback would silently exit 0 with no output after a 30 s remote-settings timeout. Fix: create `/home/ubuntu` with `node:node` ownership in the Dockerfile.
+
 ## [1.0.0] — 2026-04-17
 
 Initial public release extracted from boughtmyowncloud.
