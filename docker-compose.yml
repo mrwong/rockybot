@@ -45,13 +45,13 @@ services:
     container_name: rockybot
     restart: unless-stopped
     environment:
-      - HOME=/home/ubuntu
+      - HOME=/home/node
       - VAULT_PATH=/vault
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - CLAUDE_SUBSCRIPTION_MODE=${CLAUDE_SUBSCRIPTION_MODE:-false}
       - DRY_RUN=${DRY_RUN:-false}
 
-      # Polling intervals (seconds)
+      # Polling interval (seconds) — applies to all watchers
       - INBOX_POLL_SECONDS=${INBOX_POLL_SECONDS:-600}
 
       # Spending caps per watcher invocation
@@ -73,10 +73,18 @@ services:
       - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
       - TWILIO_FROM=${TWILIO_FROM:-}
       - TWILIO_TO=${TWILIO_TO:-}
+
+      # Interactive Discord auth for Claude subscription re-login (optional)
+      # Requires a Discord bot token and a channel the bot can post to
+      - DISCORD_INTERACTIVE_AUTH=${DISCORD_INTERACTIVE_AUTH:-false}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+      - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID:-}
+      - DISCORD_AUTH_TIMEOUT_MINUTES=${DISCORD_AUTH_TIMEOUT_MINUTES:-5}
     volumes:
       # Optional: mount Claude subscription session for Pro/Max billing
       # Comment out if using API key billing only (CLAUDE_SUBSCRIPTION_MODE=false)
-      - ~/.claude:/home/ubuntu/.claude
+      - ~/.claude:/home/node/.claude
+      - ~/.claude.json:/home/node/.claude.json
       - ./data/vault:/vault
     depends_on:
       - obsidian-headless
