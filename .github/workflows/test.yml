@@ -88,7 +88,7 @@ jobs:
             DESC="Branch: \`${{ github.ref_name }}\`"
           fi
 
-          HTTP_STATUS=$(curl -s -w "%{http_code}" -o /tmp/discord-resp \
+          HTTP_STATUS=$(curl -sL -w "%{http_code}" -o /tmp/discord-resp \
             -X POST "$DISCORD_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d "{\"embeds\":[{\"title\":\"${TITLE}\",\"description\":\"${DESC}\",\"color\":${COLOR},\"url\":\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}]}")
