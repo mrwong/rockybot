@@ -61,6 +61,10 @@ function createExportServer(port, quartzOutput, vaultPath) {
     }
 
     inProgress.add(rawSlug);
+    // Release lock on client disconnect so a browser navigation/timeout
+    // doesn't leave the slot permanently occupied
+    req.on('close', () => inProgress.delete(rawSlug));
+
     try {
       logger.info(`Export: start ${rawSlug}`);
       await buildTopicExport(quartzOutput, rawSlug, res);
