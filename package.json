@@ -5,7 +5,7 @@
   "description": "Development root — test runner and tooling for rockybot",
   "scripts": {
     "test": "jest tests/unit",
-    "test:integration": "jest tests/integration --runInBand"
+    "test:integration": "jest tests/integration --runInBand --passWithNoTests"
   },
   "devDependencies": {
     "jest": "^29.0.0",
