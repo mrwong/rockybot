@@ -1,0 +1,33 @@
+go ahead and push?
+
+---
+
+i did not see any discord notification. could it be because discord webhook url is not in env?
+
+---
+
+please just set it
+
+---
+
+can you give me a definitive list of secrets that i need to set for the github actions in this env
+
+---
+
+i have done the needful in the other terminal. please validate?
+
+---
+
+validate again?
+
+---
+
+please also change configuration to enable integrationt ests
+
+---
+
+yes
+
+---
+
+doesn't look like notifications worked
