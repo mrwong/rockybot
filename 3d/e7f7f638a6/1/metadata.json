@@ -1,0 +1,39 @@
+{
+  "cli_version": "0.5.6",
+  "checkpoint_id": "3de7f7f638a6",
+  "session_id": "8b6934c1-4c6d-4f87-962d-95658ad400d5",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-29T22:21:20.988322531Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "services/obsidian-bridge/src/index.js"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "a64f6876a543",
+  "checkpoint_transcript_start": 981,
+  "transcript_lines_at_start": 981,
+  "token_usage": {
+    "input_tokens": 32,
+    "cache_creation_tokens": 24905,
+    "cache_read_tokens": 3163463,
+    "output_tokens": 17678,
+    "api_call_count": 32
+  },
+  "session_metrics": {
+    "turn_count": 17
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-29T22:21:20.899597951Z",
+    "agent_lines": 11,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 11,
+    "total_lines_changed": 11,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}
