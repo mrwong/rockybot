@@ -1,0 +1,49 @@
+{
+  "cli_version": "0.5.6",
+  "checkpoint_id": "3f06d5a908ac",
+  "session_id": "8b6934c1-4c6d-4f87-962d-95658ad400d5",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-29T18:06:13.2965793Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".github/workflows/test.yml",
+    ".github/workflows/publish.yml"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "2444159fa440",
+  "checkpoint_transcript_start": 483,
+  "transcript_lines_at_start": 483,
+  "token_usage": {
+    "input_tokens": 5,
+    "cache_creation_tokens": 832,
+    "cache_read_tokens": 385008,
+    "output_tokens": 807,
+    "api_call_count": 3
+  },
+  "session_metrics": {
+    "turn_count": 12
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-29T18:06:13.257674181Z",
+    "agent_lines": 3,
+    "agent_removed": 3,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 3,
+    "total_lines_changed": 6,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
