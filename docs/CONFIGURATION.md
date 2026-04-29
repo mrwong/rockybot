@@ -63,6 +63,19 @@ All notification variables are optional. If left blank, that notification channe
 |---|---|
 | `DISCORD_WEBHOOK_URL` | Webhook URL for a Discord channel. rockybot posts an embed on each watcher completion and on Claude auth expiry. See [NOTIFICATIONS.md](NOTIFICATIONS.md) for setup. |
 
+### Interactive Discord auth (optional)
+
+When `DISCORD_INTERACTIVE_AUTH=true` and subscription auth fails, the bot pauses the failing task, spawns `claude login` headlessly to obtain an OAuth URL, and posts it to Discord as a clickable button. You can re-authorize Claude from your phone or browser without SSH-ing into the host. After the timeout the task auto-falls back to the API key.
+
+Requires a Discord **bot token** (not just a webhook) and the bot to be added to your server. See [NOTIFICATIONS.md](NOTIFICATIONS.md#interactive-discord-auth) for setup.
+
+| Variable | Default | Description |
+|---|---|---|
+| `DISCORD_INTERACTIVE_AUTH` | `false` | Set to `true` to enable. Requires `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID`. Only meaningful when `CLAUDE_SUBSCRIPTION_MODE=true`. |
+| `DISCORD_BOT_TOKEN` | — | Discord bot token from the Developer Portal. |
+| `DISCORD_CHANNEL_ID` | — | ID of the channel where auth prompts are posted. |
+| `DISCORD_AUTH_TIMEOUT_MINUTES` | `5` | Minutes to wait for a user response before auto-falling back to the API key. |
+
 ### WhatsApp via Twilio
 
 | Variable | Description |

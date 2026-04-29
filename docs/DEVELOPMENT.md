@@ -6,6 +6,7 @@ rockybot is a Node.js process that polls an Obsidian vault directory every N sec
 
 ```
 index.js (poll loop)
+  ├─ discordBot.init()                        ← connects Discord bot if DISCORD_INTERACTIVE_AUTH=true
   └─ withGlobalLock('inbox',  scanInbox)      ← processes research requests
   └─ withGlobalLock('amend',  scanAmendments) ← [!claude] callouts
   └─ withGlobalLock('expand', scanExpands)    ← [!expand] callouts
@@ -16,8 +17,11 @@ Each watcher:
   1. Scans vault directory for matching files
   2. Loads prompt template from vault (falls back to built-in)
   3. Substitutes tokens: {{VAULT_PATH}}, {{FILE_PATH}}, {{SEED_CONTENTS}}
-  4. Calls runClaude(prompt, vaultPath, { budgetUsd, tools, model })
+  4. Calls runClaude(prompt, vaultPath, { budgetUsd, tools, model, label })
   5. claude-runner.js spawns: claude --print <prompt> --allowedTools ... --model ...
+     On subscription auth failure (interactive mode):
+       login-runner.js spawns `claude login`, captures OAuth URL
+       discord-bot.js posts URL + buttons, waits for user response or timeout
   6. On completion, notifier.js sends Discord/WhatsApp notification
 ```
 
@@ -165,11 +169,22 @@ docker compose -f docker-compose.dev.yml build
 docker compose -f docker-compose.dev.yml up
 ```
 
+## Branch strategy
+
+| Branch | Image tag | Purpose |
+|---|---|---|
+| `dev` | `edge` | Pre-release — all feature work merges here first |
+| `main` | `latest` | Stable — only receives PRs from `dev` at release time |
+| `v1.2.3` tag | `1.2.3`, `1.2` | Pinned release |
+| `v1.2.3-rc.1` tag | `1.2.3-rc.1` | Pre-release tag — no `latest` |
+
+Open PRs against `dev`, not `main`. When `dev` is stable and ready to ship, open a PR from `dev` → `main`, then run the release script on `main`.
+
 ## Publishing a new version
 
-Use the release script — it handles CHANGELOG, version bumps, tagging, and prompts before pushing:
-
 ```bash
+# 1. merge dev → main via PR
+# 2. on main:
 ./scripts/release.sh
 ```
 

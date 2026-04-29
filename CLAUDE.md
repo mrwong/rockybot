@@ -20,8 +20,10 @@ services/
     src/
       index.js            — main poll loop (global mutex, runs all watchers sequentially)
       *-watcher.js        — five watcher modules (see below)
-      claude-runner.js    — spawns `claude --print` subprocess; Pro → API key fallback
+      claude-runner.js    — spawns `claude --print` subprocess; subscription → API key fallback; interactive auth flow
       notifier.js         — Discord webhook + Twilio WhatsApp alerts
+      discord-bot.js      — discord.js WebSocket bot for interactive auth prompts (optional)
+      login-runner.js     — spawns `claude login` headlessly to capture OAuth URL
       seeder.js           — seeds vault with scaffold files on first boot
     package.json          — canonical version source
   obsidian-bridge/        — chokidar watcher → Quartz rebuild
@@ -55,7 +57,8 @@ Budgets and models are all overridable via env vars (`INBOX_BUDGET_USD`, `AMEND_
 ## Key Architecture Notes
 
 - `index.js` holds a **global mutex** — only one Claude subprocess runs at a time across all watchers.
-- `claude-runner.js` tries the Claude subscription first; falls back to `ANTHROPIC_API_KEY` if auth fails.
+- `claude-runner.js` tries the Claude subscription first; on auth failure it either enters the interactive Discord flow (if `DISCORD_INTERACTIVE_AUTH=true`) or falls back to `ANTHROPIC_API_KEY` automatically.
+- In interactive mode, `login-runner.js` spawns `claude login` headlessly to capture the OAuth URL; `discord-bot.js` posts it to Discord as a clickable button and waits for user confirmation or a timeout before proceeding.
 - Prompt files live in the vault (`research/*-prompt.md`) — user-editable, with hardcoded fallbacks if missing.
 - The dev compose file (`docker-compose.dev.yml`) live-mounts `services/bot/src` so source changes take effect without rebuilding.
 - Bot container mounts `~/.claude:/home/node/.claude` for Pro subscription billing auth.
@@ -96,6 +99,19 @@ Use [Conventional Commits](https://www.conventionalcommits.org/) prefixes in com
 - `test:`, `chore:` → patch, shown as "Internal"
 - `docs:` → no version bump
 
+## Branch and image strategy
+
+| Branch / tag | Image tag(s) | Stability |
+|---|---|---|
+| `dev` | `edge`, `dev` | Pre-release — latest merged work |
+| `main` | `latest`, `main` | Stable — released code only |
+| `v1.2.3` | `1.2.3`, `1.2` | Pinned release |
+| `v1.2.3-rc.1` | `1.2.3-rc.1` | Pre-release tag — no `latest` |
+
+**Workflow:** feature branches → PR to `dev` → builds `edge` image → PR to `main` when stable → `latest`.
+
+Do not push directly to `main`. PRs from `dev` to `main` are the release gate.
+
 ## Releasing
 
 ```bash
@@ -111,7 +127,7 @@ The script:
 6. Writes a CHANGELOG.md entry, bumps `services/bot/package.json` and `services/obsidian-bridge/package.json`, commits as `chore: release vX.Y.Z`, and creates the git tag
 7. Asks whether to push to origin (pushing the tag triggers GitHub Actions to publish Docker images)
 
-**Never bump the version manually** — always go through `./scripts/release.sh` so the CHANGELOG stays in sync.
+Run `./scripts/release.sh` from the `main` branch after merging `dev`. **Never bump the version manually** — always go through the script so the CHANGELOG stays in sync.
 
 ## What lives where
 
