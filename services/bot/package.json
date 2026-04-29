@@ -4,6 +4,7 @@
   "description": "Self-hosted AI research assistant that watches an Obsidian vault and uses Claude to process research requests and inline tasks",
   "main": "src/index.js",
   "dependencies": {
+    "discord.js": "^14.0.0",
     "fs-extra": "^11.2.0",
     "glob": "^11.0.0"
   }

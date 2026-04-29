@@ -2,6 +2,8 @@
 
 const { spawn } = require('child_process');
 const { notifyAuthExpired } = require('./notifier');
+const discordBot = require('./discord-bot');
+const { startLogin } = require('./login-runner');
 const logger = require('./logger');
 
 const CLAUDE_BIN = process.env.CLAUDE_BIN || 'claude';
@@ -54,11 +56,34 @@ function spawnClaude(prompt, cwd, { budgetUsd, tools, model, useApiKey }) {
   });
 }
 
+// Handles a subscription auth failure.  In interactive mode: spawns `claude login`,
+// posts the OAuth URL to Discord, and waits for the user to decide.
+// In basic mode: fires a throttled Discord alert and falls back immediately.
+// Returns 'use-api-key' | 'retry-subscription'.
+async function handleAuthFailure(label) {
+  if (discordBot.isEnabled()) {
+    logger.warn('claude-runner: subscription auth failed — starting OAuth flow, posting to Discord');
+    try {
+      const { url, proc } = await startLogin();
+      return await discordBot.askAuthDecision(label, url, proc);
+    } catch (err) {
+      logger.warn(`claude-runner: could not start login flow (${err.message}) — falling back to API key`);
+      return 'use-api-key';
+    }
+  }
+
+  logger.warn('claude-runner: subscription auth failed — notifying Discord, falling back to API key');
+  await notifyAuthExpired();
+  return 'use-api-key';
+}
+
 // Invokes claude, trying subscription billing first when CLAUDE_SUBSCRIPTION_MODE=true.
-// On auth or rate-limit error, falls back to ANTHROPIC_API_KEY billing.
-// On auth error, also fires a throttled Discord alert.
+// On auth error: enters interactive Discord flow (if enabled) or falls back automatically.
+// On rate-limit error: falls back to ANTHROPIC_API_KEY billing silently.
 // When DRY_RUN=true, logs the call parameters and returns without running Claude.
-async function runClaude(prompt, cwd, { budgetUsd = '2.00', tools = 'Bash,Edit,Read,Write,Glob,Grep,WebSearch,WebFetch', model = 'sonnet' } = {}) {
+//
+// label (optional) — human-readable task name shown in Discord auth prompts.
+async function runClaude(prompt, cwd, { budgetUsd = '2.00', tools = 'Bash,Edit,Read,Write,Glob,Grep,WebSearch,WebFetch', model = 'sonnet', label = '' } = {}) {
   if (DRY_RUN) {
     logger.info(`claude-runner: DRY_RUN — would call claude model=${model} budget=${budgetUsd} tools=${tools} cwd=${cwd}`);
     return;
@@ -71,16 +96,25 @@ async function runClaude(prompt, cwd, { budgetUsd = '2.00', tools = 'Bash,Edit,R
     if (result.ok) return;
 
     const errorType = classifyStderr(result.stderr);
-    if (errorType === 'auth') {
-      logger.warn('claude-runner: subscription auth failed — notifying Discord, falling back to API key');
-      await notifyAuthExpired();
+    if (errorType === 'auth' || result.stderr.trim().length === 0) {
+      if (result.stderr.trim().length === 0) {
+        // Claude exited silently (code 0, no stdout, no stderr) — likely session expired or
+        // config not found. Log a warning before handling so this is visible in the logs.
+        logger.warn('claude-runner: subscription billing exited silently with no output — session may be expired; run "claude login" on the host to restore subscription billing.');
+      }
+
+      const decision = await handleAuthFailure(label);
+
+      if (decision === 'retry-subscription') {
+        logger.info('claude-runner: retrying with subscription billing after re-auth');
+        const retry = await spawnClaude(prompt, cwd, { ...opts, useApiKey: false });
+        if (retry.ok) return;
+        throw new Error(`claude (subscription retry) failed: ${retry.stderr.slice(0, 300)}`);
+      }
+
+      // decision === 'use-api-key' — fall through to API key path below
     } else if (errorType === 'rate-limit') {
       logger.warn('claude-runner: subscription rate-limit hit — falling back to API key');
-    } else if (result.stderr.trim().length === 0) {
-      // Claude exited silently (code 0, no stdout, no stderr) — likely session expired or
-      // config not found. Log a warning before falling back so this is visible in the logs.
-      logger.warn('claude-runner: subscription billing exited silently with no output — session may be expired; run "claude login" on the host to restore subscription billing. Falling back to API key.');
-      await notifyAuthExpired();
     } else {
       throw new Error(`claude (subscription) failed: ${result.stderr.slice(0, 300)}`);
     }

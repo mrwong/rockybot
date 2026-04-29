@@ -1,6 +1,7 @@
 'use strict';
 
 const logger = require('./logger');
+const discordBot         = require('./discord-bot');
 const { seedVault }      = require('./seeder');
 const { scanInbox }      = require('./inbox-watcher');
 const { scanAmendments } = require('./amend-watcher');
@@ -51,6 +52,7 @@ async function main() {
   logger.info(`poll interval: every ${INBOX_POLL_MS / 1000}s`);
   if (process.env.DRY_RUN === 'true') logger.info('DRY_RUN=true — watchers will detect but not call Claude');
 
+  await discordBot.init();
   await seedVault(vaultPath);
   await pollAll();
   setInterval(pollAll, INBOX_POLL_MS);

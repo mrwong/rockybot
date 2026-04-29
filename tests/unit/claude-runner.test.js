@@ -9,6 +9,14 @@ jest.mock('child_process', () => ({ spawn: jest.fn() }));
 jest.mock('../../services/bot/src/notifier', () => ({
   notifyAuthExpired: jest.fn().mockResolvedValue(undefined),
 }));
+jest.mock('../../services/bot/src/discord-bot', () => ({
+  isEnabled:       jest.fn().mockReturnValue(false),
+  init:            jest.fn().mockResolvedValue(undefined),
+  askAuthDecision: jest.fn().mockResolvedValue('use-api-key'),
+}));
+jest.mock('../../services/bot/src/login-runner', () => ({
+  startLogin: jest.fn().mockResolvedValue({ url: 'https://auth.example.com/oauth', proc: { kill: jest.fn(), killed: false } }),
+}));
 jest.mock('../../services/bot/src/logger', () => ({
   info: jest.fn(),
   warn: jest.fn(),
@@ -37,12 +45,15 @@ function freshRequires(env = {}) {
     runClaude:         require('../../services/bot/src/claude-runner').runClaude,
     spawn:             require('child_process').spawn,
     notifyAuthExpired: require('../../services/bot/src/notifier').notifyAuthExpired,
+    discordBot:        require('../../services/bot/src/discord-bot'),
+    startLogin:        require('../../services/bot/src/login-runner').startLogin,
     logger:            require('../../services/bot/src/logger'),
   };
 }
 
 afterEach(() => {
   delete process.env.CLAUDE_SUBSCRIPTION_MODE;
+  delete process.env.DISCORD_INTERACTIVE_AUTH;
   delete process.env.DRY_RUN;
   jest.clearAllMocks();
 });
@@ -191,5 +202,110 @@ describe('DRY_RUN mode', () => {
 
     await runClaude('prompt', '/tmp', { model: 'haiku', budgetUsd: '0.50' });
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('DRY_RUN'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Interactive auth mode (DISCORD_INTERACTIVE_AUTH=true)
+// ---------------------------------------------------------------------------
+
+describe('interactive auth mode: user chooses API key', () => {
+  it('calls startLogin and askAuthDecision on auth failure', async () => {
+    const { runClaude, spawn, discordBot, startLogin } = freshRequires({
+      CLAUDE_SUBSCRIPTION_MODE: 'true',
+      DISCORD_INTERACTIVE_AUTH: 'true',
+    });
+    discordBot.isEnabled.mockReturnValue(true);
+    discordBot.askAuthDecision.mockResolvedValue('use-api-key');
+    spawn
+      .mockReturnValueOnce(fakeProc({ exitCode: 1, stderr: 'not authenticated' }))
+      .mockReturnValueOnce(fakeProc({ exitCode: 0, stdout: 'api output' }));
+
+    await expect(runClaude('prompt', '/tmp', { label: 'test-task.md' })).resolves.toBeUndefined();
+    expect(startLogin).toHaveBeenCalledTimes(1);
+    expect(discordBot.askAuthDecision).toHaveBeenCalledWith('test-task.md', 'https://auth.example.com/oauth', expect.anything());
+    expect(spawn).toHaveBeenCalledTimes(2);
+  });
+
+  it('does NOT call notifyAuthExpired in interactive mode', async () => {
+    const { runClaude, spawn, discordBot, notifyAuthExpired } = freshRequires({
+      CLAUDE_SUBSCRIPTION_MODE: 'true',
+      DISCORD_INTERACTIVE_AUTH: 'true',
+    });
+    discordBot.isEnabled.mockReturnValue(true);
+    discordBot.askAuthDecision.mockResolvedValue('use-api-key');
+    spawn
+      .mockReturnValueOnce(fakeProc({ exitCode: 1, stderr: 'not authenticated' }))
+      .mockReturnValueOnce(fakeProc({ exitCode: 0, stdout: 'api output' }));
+
+    await runClaude('prompt', '/tmp', {});
+    expect(notifyAuthExpired).not.toHaveBeenCalled();
+  });
+});
+
+describe('interactive auth mode: user chooses retry-subscription', () => {
+  it('retries with subscription billing after re-auth', async () => {
+    const { runClaude, spawn, discordBot } = freshRequires({
+      CLAUDE_SUBSCRIPTION_MODE: 'true',
+      DISCORD_INTERACTIVE_AUTH: 'true',
+    });
+    discordBot.isEnabled.mockReturnValue(true);
+    discordBot.askAuthDecision.mockResolvedValue('retry-subscription');
+    spawn
+      .mockReturnValueOnce(fakeProc({ exitCode: 1, stderr: 'not authenticated' }))  // initial attempt
+      .mockReturnValueOnce(fakeProc({ exitCode: 0, stdout: 'subscription output' })); // retry succeeds
+
+    await expect(runClaude('prompt', '/tmp', {})).resolves.toBeUndefined();
+    expect(spawn).toHaveBeenCalledTimes(2);
+    // Second spawn must NOT pass ANTHROPIC_API_KEY (subscription billing)
+    const secondCallEnv = spawn.mock.calls[1][2].env;
+    expect(secondCallEnv).not.toHaveProperty('ANTHROPIC_API_KEY');
+  });
+
+  it('throws when subscription retry also fails', async () => {
+    const { runClaude, spawn, discordBot } = freshRequires({
+      CLAUDE_SUBSCRIPTION_MODE: 'true',
+      DISCORD_INTERACTIVE_AUTH: 'true',
+    });
+    discordBot.isEnabled.mockReturnValue(true);
+    discordBot.askAuthDecision.mockResolvedValue('retry-subscription');
+    spawn
+      .mockReturnValueOnce(fakeProc({ exitCode: 1, stderr: 'not authenticated' }))
+      .mockReturnValueOnce(fakeProc({ exitCode: 1, stderr: 'still not authenticated' }));
+
+    await expect(runClaude('prompt', '/tmp', {})).rejects.toThrow('claude (subscription retry) failed');
+  });
+});
+
+describe('interactive auth mode: silent exit', () => {
+  it('also enters interactive flow on silent exit', async () => {
+    const { runClaude, spawn, discordBot, startLogin } = freshRequires({
+      CLAUDE_SUBSCRIPTION_MODE: 'true',
+      DISCORD_INTERACTIVE_AUTH: 'true',
+    });
+    discordBot.isEnabled.mockReturnValue(true);
+    discordBot.askAuthDecision.mockResolvedValue('use-api-key');
+    spawn
+      .mockReturnValueOnce(fakeProc({ exitCode: 0, stdout: '', stderr: '' }))  // silent exit
+      .mockReturnValueOnce(fakeProc({ exitCode: 0, stdout: 'api output' }));
+
+    await expect(runClaude('prompt', '/tmp', {})).resolves.toBeUndefined();
+    expect(startLogin).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('basic mode still works when interactive auth is off', () => {
+  it('calls notifyAuthExpired and does NOT call startLogin', async () => {
+    const { runClaude, spawn, notifyAuthExpired, startLogin } = freshRequires({
+      CLAUDE_SUBSCRIPTION_MODE: 'true',
+      DISCORD_INTERACTIVE_AUTH: 'false',
+    });
+    spawn
+      .mockReturnValueOnce(fakeProc({ exitCode: 1, stderr: 'not authenticated' }))
+      .mockReturnValueOnce(fakeProc({ exitCode: 0, stdout: 'api output' }));
+
+    await runClaude('prompt', '/tmp', {});
+    expect(notifyAuthExpired).toHaveBeenCalledTimes(1);
+    expect(startLogin).not.toHaveBeenCalled();
   });
 });
