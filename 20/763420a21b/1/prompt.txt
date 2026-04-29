@@ -1,0 +1,9 @@
+/redeploy
+
+---
+
+just redeploy homelab, build of rockybot was fine
+
+---
+
+clicking on the explorer just simply opens and closes the expand, it doesn't load the index. https://notes.boughtmyown.cloud/research/mach-e-acc-sensor/ goes to 404. this agent is running on the host. you can do these things yourself.
