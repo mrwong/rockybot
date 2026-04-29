@@ -35,6 +35,17 @@ function configureQuartz() {
   }
   fs.writeFileSync(configPath, config, 'utf8');
   logger.info('quartz.config.ts updated');
+
+  // Patch layout: make explorer folder titles link to the folder index page.
+  // Without this, Quartz places index.md as a root-level leaf (not inside the folder)
+  // because simplifySlug strips /index, making "topic/index" → "topic" at root level.
+  const layoutPath = path.join(QUARTZ_SRC, 'quartz.layout.ts');
+  if (fs.existsSync(layoutPath)) {
+    let layout = fs.readFileSync(layoutPath, 'utf8');
+    layout = layout.replace(/Component\.Explorer\(\)/g, 'Component.Explorer({ folderClickBehavior: "link" })');
+    fs.writeFileSync(layoutPath, layout, 'utf8');
+    logger.info('quartz.layout.ts updated (Explorer folderClickBehavior: link)');
+  }
 }
 
 async function main() {
