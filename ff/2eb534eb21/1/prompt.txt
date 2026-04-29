@@ -1,0 +1,1 @@
+that worked. do we neeed to undo any debugging things that we had to perform? did we deploy the new edge version of the bot to homelab? we need to take a todo to build out that empty integration test. what other cleanup items need to be done?
