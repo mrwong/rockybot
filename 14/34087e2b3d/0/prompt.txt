@@ -1,0 +1,5 @@
+with regard to our release procudure, considering that this is now a public project, can we merge on to a develop branch so that we can build images against the develop branch? how should we be able to release our non stable code? please offer some suggestions
+
+---
+
+please implement a
