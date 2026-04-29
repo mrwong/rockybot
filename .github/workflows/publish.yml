@@ -67,9 +67,11 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           [[ -z "$DISCORD_WEBHOOK_URL" ]] && exit 0
-          curl -s -o /dev/null -X POST "$DISCORD_WEBHOOK_URL" \
+          HTTP_STATUS=$(curl -s -w "%{http_code}" -o /tmp/discord-resp \
+            -X POST "$DISCORD_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            -d "{\"embeds\":[{\"title\":\"✅ rockybot/${{ matrix.service }} published\",\"description\":\"Image: \`${{ matrix.image }}:${{ github.ref_name }}\`\\nRef: \`${{ github.ref_name }}\`\",\"color\":3066993,\"url\":\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}]}"
+            -d "{\"embeds\":[{\"title\":\"✅ rockybot/${{ matrix.service }} published\",\"description\":\"Image: \`${{ matrix.image }}:${{ github.ref_name }}\`\\nRef: \`${{ github.ref_name }}\`\",\"color\":3066993,\"url\":\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}]}")
+          echo "Discord HTTP $HTTP_STATUS: $(cat /tmp/discord-resp)"
 
       - name: Notify Discord (failure)
         if: failure()
@@ -77,6 +79,8 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           [[ -z "$DISCORD_WEBHOOK_URL" ]] && exit 0
-          curl -s -o /dev/null -X POST "$DISCORD_WEBHOOK_URL" \
+          HTTP_STATUS=$(curl -s -w "%{http_code}" -o /tmp/discord-resp \
+            -X POST "$DISCORD_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            -d "{\"embeds\":[{\"title\":\"❌ rockybot/${{ matrix.service }} build FAILED\",\"description\":\"Ref: \`${{ github.ref_name }}\`\",\"color\":15158332,\"url\":\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}]}"
+            -d "{\"embeds\":[{\"title\":\"❌ rockybot/${{ matrix.service }} build FAILED\",\"description\":\"Ref: \`${{ github.ref_name }}\`\",\"color\":15158332,\"url\":\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}]}")
+          echo "Discord HTTP $HTTP_STATUS: $(cat /tmp/discord-resp)"

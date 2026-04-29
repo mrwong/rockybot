@@ -88,6 +88,8 @@ jobs:
             DESC="Branch: \`${{ github.ref_name }}\`"
           fi
 
-          curl -s -o /dev/null -X POST "$DISCORD_WEBHOOK_URL" \
+          HTTP_STATUS=$(curl -s -w "%{http_code}" -o /tmp/discord-resp \
+            -X POST "$DISCORD_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            -d "{\"embeds\":[{\"title\":\"${TITLE}\",\"description\":\"${DESC}\",\"color\":${COLOR},\"url\":\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}]}"
+            -d "{\"embeds\":[{\"title\":\"${TITLE}\",\"description\":\"${DESC}\",\"color\":${COLOR},\"url\":\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}]}")
+          echo "Discord HTTP $HTTP_STATUS: $(cat /tmp/discord-resp)"
