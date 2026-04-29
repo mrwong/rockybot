@@ -155,6 +155,30 @@ Within 10 minutes, Claude audits the wiki for orphaned pages, broken wikilinks, 
 
 ---
 
+## Exporting a topic
+
+You can download any published topic as a self-contained ZIP for offline reading or sharing with people who don't have access to your notes server.
+
+**How it works:**
+
+On the notes-web root index (`http://notes.yourdomain/`), each published topic has a **⬇ Export ZIP** link next to it. Click the link to download the topic as a `.zip` file immediately — generation takes under a second for typical topics.
+
+The ZIP contains:
+- All rendered HTML pages for the topic (index + sub-pages)
+- Quartz CSS, JavaScript, and fonts so pages render correctly offline
+- Cross-topic links converted to non-clickable text (the content is there, the link isn't)
+
+Open the extracted `index.html` in any browser — no server, no internet required.
+
+**What doesn't work in the ZIP:**
+- Full-text search (requires a server to build the search index)
+- The interactive graph view (requires JS fetches)
+- Links to pages in other topics
+
+**Security:** Only published topics (`publish: true` in `index.md`) can be exported. The export endpoint validates against the current publish list on every request — revoking `publish: true` immediately blocks exports, even before the Quartz rebuild completes.
+
+---
+
 ## Output structure
 
 ```

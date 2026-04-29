@@ -2,6 +2,11 @@
 
 All notable changes to rockybot are documented here. Version numbers follow [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`. Documentation-only changes do not increment the version.
 
+## [Unreleased]
+
+### Added
+- Topic export: published topics now have a "⬇ Export ZIP" link on the notes-web root index. Clicking it generates and downloads a self-contained HTML ZIP (topic pages + Quartz CSS/JS assets) that works offline. Cross-topic links are neutered with a tooltip. Export is on-demand via an HTTP server in the bridge container proxied through nginx; slug validation and publish-list whitelist (read fresh on every request) prevent path traversal and access to unpublished topics.
+
 ## [1.0.1] — 2026-04-28
 
 ### Fixed

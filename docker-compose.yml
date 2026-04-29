@@ -21,6 +21,8 @@ services:
     volumes:
       - ./data/vault:/vault
       - ./data/quartz-output:/quartz-output
+    expose:
+      - "3001"
     depends_on:
       - obsidian-headless
 

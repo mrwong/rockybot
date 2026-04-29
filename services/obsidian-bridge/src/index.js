@@ -8,6 +8,7 @@ const path = require('path');
 const chokidar = require('chokidar');
 const logger = require('./logger');
 const { scheduleRebuild, runBuild } = require('./quartz-builder');
+const { createExportServer } = require('./http-server');
 
 const VAULT_PATH    = process.env.VAULT_PATH    || '/vault';
 const QUARTZ_OUTPUT = process.env.QUARTZ_OUTPUT || '/quartz-output';
@@ -43,6 +44,9 @@ async function main() {
 
   await fs.ensureDir(VAULT_PATH);
   await fs.ensureDir(QUARTZ_OUTPUT);
+
+  createExportServer(3001, QUARTZ_OUTPUT, VAULT_PATH);
+  logger.info('Export server listening on :3001');
 
   // Initial build from whatever is already in the vault
   runBuild(VAULT_PATH, QUARTZ_OUTPUT);

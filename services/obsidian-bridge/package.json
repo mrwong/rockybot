@@ -4,6 +4,8 @@
   "description": "Watches NFS vault for changes and builds Quartz static site",
   "main": "src/index.js",
   "dependencies": {
+    "archiver": "^7.0.0",
+    "cheerio": "^1.0.0",
     "chokidar": "^3.6.0",
     "fs-extra": "^11.2.0"
   }

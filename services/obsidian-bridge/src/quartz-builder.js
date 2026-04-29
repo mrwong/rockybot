@@ -51,7 +51,10 @@ function runBuild(vaultPath, quartzOutput) {
     );
 
     // Generate a root index so Quartz produces index.html at the site root
-    const topicLinks = topics.map(t => `- [[${t}/index|${t.replace(/-/g, ' ')}]]`).join('\n');
+    const topicLinks = topics.map(t => {
+      const label = t.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      return `- [[${t}/index|${label}]]  ·  [⬇ Export ZIP](/export/${t})`;
+    }).join('\n');
     fs.outputFileSync(
       path.join(QUARTZ_SRC, 'content', 'index.md'),
       `---\ntitle: Research\n---\n\n# Research\n\n${topicLinks}\n`
@@ -74,4 +77,4 @@ function runBuild(vaultPath, quartzOutput) {
   }
 }
 
-module.exports = { scheduleRebuild, runBuild };
+module.exports = { scheduleRebuild, runBuild, getPublishedTopics };
