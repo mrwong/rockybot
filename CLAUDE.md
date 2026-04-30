@@ -10,7 +10,7 @@ rockybot is a self-hosted autonomous research assistant. It watches an Obsidian 
 | `rockybot-bridge` | `ghcr.io/mrwong/rockybot-bridge` | Watches vault for changes, rebuilds Quartz static site |
 | `rockybot-headless` | `ghcr.io/mrwong/rockybot-headless` | Obsidian Sync daemon (remote deployments only) |
 
-The bot is deployed in the homelab via `~/src/boughtmyowncloud` — that repo owns the `docker-compose.yml` entry, secrets injection, and GitOps pipeline. To redeploy after changing rockybot code: push a release tag here (triggers GHCR image publish), then push to `main` in boughtmyowncloud (triggers GitOps sync).
+The bot is deployed via a separate infrastructure repo that owns the `docker-compose.yml` entry, secrets injection, and GitOps pipeline. To redeploy after changing rockybot code: push a release tag here (triggers GHCR image publish), then push to `main` in your infrastructure repo (triggers GitOps sync).
 
 ## Repository Layout
 
@@ -69,8 +69,8 @@ Budgets and models are all overridable via env vars (`INBOX_BUDGET_USD`, `AMEND_
 # Run unit tests (no Claude required)
 npm test
 
-# Run integration tests (spawns real Claude — costs money)
-npm run test:integration
+# Run integration tests in Docker (no host Node.js needed, no Claude API required)
+npm run test:integration:docker
 
 # Start dev stack (isolated vault, haiku models, $0.10 caps)
 docker compose -f docker-compose.dev.yml up

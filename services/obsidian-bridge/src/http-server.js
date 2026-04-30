@@ -7,6 +7,9 @@ const { getPublishedTopics } = require('./quartz-builder');
 const { buildTopicExport } = require('./export-builder');
 const logger = require('./logger');
 
+const { version } = require('../package.json');
+const VERSION_BODY = JSON.stringify({ version });
+
 // Only lowercase letters, digits, and hyphens — blocks ../, encoded traversal, null bytes
 const SLUG_RE = /^[a-z0-9-]+$/;
 
@@ -18,6 +21,12 @@ function createExportServer(port, quartzOutput, vaultPath) {
     if (req.method !== 'GET') {
       res.writeHead(405);
       res.end('Method Not Allowed');
+      return;
+    }
+
+    if (req.url === '/version') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(VERSION_BODY);
       return;
     }
 

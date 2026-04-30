@@ -190,11 +190,28 @@ Open PRs against `dev`, not `main`. When `dev` is stable and ready to ship, open
 ## Publishing a new version
 
 ```bash
-# 1. merge dev → main via PR
-# 2. on main:
+# 1. All integration tests green
+npm run test:integration:docker
+
+# 2. Merge dev → main (PR or direct push)
+git checkout main && git merge dev && git push origin main
+
+# 3. Run release script on main — bumps versions, updates CHANGELOG, tags
 ./scripts/release.sh
+
+# 4. Push the tag — triggers GitHub Actions to publish Docker images
+git push origin main --tags
 ```
 
-The script shows commits since the last tag grouped by type, proposes a semver bump (major/minor/patch), asks you to confirm or override, then commits, tags, and optionally pushes. Pushing the tag triggers GitHub Actions to publish Docker images to GHCR.
+The script shows commits since the last tag grouped by type, proposes a semver bump (major/minor/patch), asks you to confirm or override, then commits and tags.
+
+**5. Redeploy your infrastructure** — update `docker-compose.yml` to the new image tag (or pull `:latest`), push to trigger GitOps, then verify the correct version is live:
+
+```bash
+curl https://notes.yourdomain/version
+# → {"version":"1.1.0"}
+```
+
+Wait until the endpoint returns the new version before smoke-testing. The bridge exposes this at `/version` (proxied through nginx); it reads from the baked-in `package.json` so it always reflects the running image's version.
 
 See `CLAUDE.md` for the full versioning policy, including which commit prefixes map to which bump levels and what counts as a docs-only change (no bump).

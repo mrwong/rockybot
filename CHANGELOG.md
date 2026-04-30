@@ -20,7 +20,7 @@ All notable changes to rockybot are documented here. Version numbers follow [Sem
 
 ## [1.0.0] — 2026-04-17
 
-Initial public release extracted from boughtmyowncloud.
+Initial public release extracted from a private homelab monorepo.
 
 ### Added
 - Inbox watcher: drop a request into `research/inbox/`, Claude writes a multi-page wiki tree

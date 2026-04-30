@@ -84,6 +84,15 @@ beforeEach(() => jest.clearAllMocks());
 // Tests
 // ---------------------------------------------------------------------------
 
+describe('http-server: version endpoint', () => {
+  it('GET /version → 200 with JSON version field', async () => {
+    const res = await request(server, 'GET', '/version');
+    expect(res.status).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.version).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+});
+
 describe('http-server: routing', () => {
   it('GET /export/valid-topic → 200 and calls buildTopicExport', async () => {
     const res = await request(server, 'GET', '/export/valid-topic');
