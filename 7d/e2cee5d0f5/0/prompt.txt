@@ -1,0 +1,1 @@
+between 1 and 2 you would need to redeploy the homelab env to make sure you're picking up the correct version. we should probably add some kind of capability for the product to report it's own version number such that we can test for that (as to which version we are testing) .
