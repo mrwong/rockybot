@@ -1,0 +1,1 @@
+okay. now that we have tests up, please do a pass of all the things that we did recently, and update the project documentation, the claude project docs, and give me a plan of how you would prepare the next version bump
