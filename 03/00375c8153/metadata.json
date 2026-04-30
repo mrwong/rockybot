@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.5.6",
+  "checkpoint_id": "0300375c8153",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "services/bot/package.json",
+    "services/obsidian-bridge/package.json"
+  ],
+  "sessions": [
+    {
+      "metadata": "/03/00375c8153/0/metadata.json",
+      "transcript": "/03/00375c8153/0/full.jsonl",
+      "content_hash": "/03/00375c8153/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 3,
+    "cache_creation_tokens": 1716,
+    "cache_read_tokens": 355000,
+    "output_tokens": 536,
+    "api_call_count": 3
+  }
+}
