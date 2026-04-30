@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="/">
+  <link rel="icon" href="../static/icon.png">
+  <link href="../index.css" rel="stylesheet" type="text/css">
+  <script src="../prescript.js" type="application/javascript"></script>
+  <script type="module" src="../postscript.js"></script>
+  <link rel="modulepreload" href="../postscript.js">
+</head>
+<body>
+  <div class="explorer desktop-only">
+    <a href="../other-topic/">Other Topic</a>
+    <a href="../my-topic/sub-page">Sub Page in Explorer</a>
+  </div>
+  <div class="search"><input placeholder="Search"/></div>
+  <div class="graph-outer"><canvas></canvas></div>
+  <div class="backlinks"><a href="../other-topic/page">Related</a></div>
+  <div id="content">
+    <a href="../my-topic/sub-page">Sub Page Link</a>
+    <a href="../my-topic/">Topic Root</a>
+    <a href="../my-topic">Topic Root No Slash</a>
+    <a href="../my-topic/sub-page#section">Sub Page with Anchor</a>
+    <a href="../other-topic/page">Cross Topic</a>
+    <a href="../research/my-topic/sub-page">Vault Absolute Link</a>
+    <a href="https://example.com">External</a>
+    <a href="#heading">Same-Page Anchor</a>
+    <a href=".">Dot Link</a>
+    <img src="../static/icon.png" alt="icon">
+  </div>
+</body>
+</html>

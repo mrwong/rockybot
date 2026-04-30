@@ -148,4 +148,4 @@ function buildTopicExport(quartzOutput, topicSlug, res) {
   });
 }
 
-module.exports = { buildTopicExport };
+module.exports = { buildTopicExport, rewriteHtml };
