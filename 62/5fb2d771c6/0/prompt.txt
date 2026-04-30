@@ -1,0 +1,5 @@
+can you alter the /redeploy skill to just redeploy the homelab
+
+---
+
+/redeploy

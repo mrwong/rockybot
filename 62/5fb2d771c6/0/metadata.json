@@ -1,0 +1,56 @@
+{
+  "cli_version": "0.5.6",
+  "checkpoint_id": "625fb2d771c6",
+  "session_id": "8b6934c1-4c6d-4f87-962d-95658ad400d5",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-30T02:12:50.801975335Z",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "services/obsidian-bridge/src/export-builder.js",
+    "tests/fixtures/test-quartz-output/my-topic/index.html",
+    "tests/fixtures/test-quartz-output/my-topic/sub-page.html",
+    "tests/fixtures/test-quartz-output/index.css",
+    "tests/integration/export-builder.test.js",
+    "tests/integration/quartz-builder.test.js",
+    "tests/integration/http-server.test.js",
+    "package.json",
+    ".github/workflows/test.yml"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-4-6",
+  "turn_id": "9ebb64484cc5",
+  "checkpoint_transcript_start": 1279,
+  "transcript_lines_at_start": 1279,
+  "token_usage": {
+    "input_tokens": 63,
+    "cache_creation_tokens": 53847,
+    "cache_read_tokens": 5602924,
+    "output_tokens": 22714,
+    "api_call_count": 54
+  },
+  "session_metrics": {
+    "turn_count": 20
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-30T02:12:50.691388589Z",
+    "agent_lines": 511,
+    "agent_removed": 5,
+    "human_added": 2,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 513,
+    "total_lines_changed": 518,
+    "agent_percentage": 99.61389961389962,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
