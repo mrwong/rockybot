@@ -5,7 +5,13 @@ All notable changes to rockybot are documented here. Version numbers follow [Sem
 ## [Unreleased]
 
 ### Added
-- Topic export: published topics now have a "⬇ Export ZIP" link on the notes-web root index. Clicking it generates and downloads a self-contained HTML ZIP (topic pages + Quartz CSS/JS assets) that works offline. Cross-topic links are neutered with a tooltip. Export is on-demand via an HTTP server in the bridge container proxied through nginx; slug validation and publish-list whitelist (read fresh on every request) prevent path traversal and access to unpublished topics.
+- Topic export: published topics now have a "⬇ Export ZIP" link on the notes-web root index. Clicking it generates and downloads a self-contained HTML ZIP (topic pages + Quartz CSS/JS assets) that works offline. Cross-topic links are neutered with a tooltip. Export is on-demand via an HTTP server in the bridge container (port 3001) proxied through nginx; slug format gate, publish-list whitelist (read fresh per request), Quartz output existence check, and a per-topic concurrency guard (429) prevent misuse.
+- Integration test suite (49 tests) covering `getPublishedTopics`, `rewriteHtml`/`buildTopicExport` (ZIP structure and HTML rewriting), and the HTTP export server (routing, slug format gate, publish whitelist, 503 on missing Quartz output, 429 concurrency guard). Run locally with `npm run test:integration:docker` — no host Node.js required.
+
+### Fixed
+- notes-web: clicking a topic folder in the Explorer sidebar now navigates to the topic index page instead of only toggling expand/collapse. Fix: bridge startup patches `quartz.layout.ts` to set `folderClickBehavior: "link"`.
+- notes-web: vault-absolute wikilinks containing the `research/` URL prefix (e.g. `/research/my-topic/page`) now resolve correctly instead of returning 404. Fix: nginx rewrites `/research/*` → `/*`.
+- Export: in-progress lock was never released on client disconnect, permanently blocking re-export of that topic until the bridge restarted. Fix: `req.on('close')` clears the lock immediately on disconnect.
 
 ## [1.0.1] — 2026-04-28
 

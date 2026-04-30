@@ -133,22 +133,29 @@ docker run --rm \
 
 ## Running tests locally
 
-Unit tests run against the root `package.json` (no Docker needed if you have Node.js):
+**Unit tests** (no Docker, no Claude — but requires Node.js on the host):
 
 ```bash
 npm install
-npm test              # unit tests only (no Claude, no vault)
-npm run test:integration  # real Claude calls, requires ANTHROPIC_API_KEY
+npm test
 ```
 
-Or via Docker:
+**Integration tests** run in a pre-baked Docker image so no host Node.js is needed:
 
 ```bash
-docker run --rm -w /repo -v $(pwd):/repo node:20-alpine \
-  sh -c "npm install && npm test"
+npm run test:integration:docker
 ```
 
-Integration tests use `VAULT_PATH=/tmp/ci-test-vault` and are budget-capped to $0.10 per watcher. They require `ANTHROPIC_API_KEY` in the environment.
+This builds `Dockerfile.test` on first run (caches `npm ci` layer), then mounts the source live. Subsequent runs skip the install and start in ~3 seconds. Rebuild the image only when `package.json` changes:
+
+```bash
+docker compose -f docker-compose.test.yml build
+```
+
+The integration suite covers three surface areas with 49 tests — no Claude API key required:
+- **`quartz-builder`** — `getPublishedTopics` vault scanning and publish flag filtering
+- **`export-builder`** — `rewriteHtml` HTML rewriting and `buildTopicExport` ZIP structure
+- **`http-server`** — full HTTP server: routing, slug format gate, publish whitelist, 503/429 guards
 
 ## Local development with docker-compose.dev.yml
 
