@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.5.6",
+  "checkpoint_id": "bcb146226618",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".github/workflows/test.yml",
+    "Dockerfile.test",
+    "docker-compose.test.yml",
+    "package.json",
+    "tests/integration/http-server.test.js"
+  ],
+  "sessions": [
+    {
+      "metadata": "/bc/b146226618/0/metadata.json",
+      "transcript": "/bc/b146226618/0/full.jsonl",
+      "content_hash": "/bc/b146226618/0/content_hash.txt",
+      "prompt": "/bc/b146226618/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 34,
+    "cache_creation_tokens": 58519,
+    "cache_read_tokens": 1325079,
+    "output_tokens": 7613,
+    "api_call_count": 26
+  }
+}

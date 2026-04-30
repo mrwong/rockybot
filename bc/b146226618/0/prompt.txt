@@ -1,0 +1,13 @@
+can we rejigger to run the integration tests locally as opposed to in the as a github action?
+
+---
+
+actually rather than run the test suite locally, can we run the test suite in docker for isolation? is this even a good idea?
+
+---
+
+what about making a docker compose for an already baked integration env and then using that image to run the integration tests.
+
+---
+
+yes lets go that route.
