@@ -20,7 +20,7 @@ async function walkDir(dirPath, baseRel, callback) {
 }
 
 // Converts a within-topic href (relative ../topicSlug/X or absolute /topicSlug/X)
-// to a same-directory relative .html path for use inside the ZIP.
+// to a same-directory relative .html path (files are at ZIP root).
 function rewriteTopicLink(href, topicSlug) {
   const absPrefix = `/${topicSlug}`;
   const relPrefix = `../${topicSlug}`;
@@ -40,17 +40,38 @@ function rewriteTopicLink(href, topicSlug) {
   return `./${rest}${fragment}`;
 }
 
+// Strips the leading ../ that Quartz generates for paths relative to a topic subdir.
+// In the ZIP, those root-level resources (index.css, static/) sit alongside the HTML files.
+function stripParent(href) {
+  return href.startsWith('../') ? href.slice(3) : href;
+}
+
 function rewriteHtml(html, topicSlug) {
   const $ = cheerio.load(html, { decodeEntities: false });
 
-  // Remove elements that don't work or make sense in an offline ZIP export
+  // Remove elements that don't work in an offline ZIP
   $('base').remove();
-  $('script').remove();                       // SPA routing, graph, search — all need a server
-  $('link[rel="modulepreload"]').remove();    // preloads for removed scripts
-  $('.explorer.desktop-only').remove();       // full site navigation tree
-  $('.search').remove();                      // search bar (non-functional offline)
-  $('.graph-outer').remove();                 // knowledge graph (needs postscript.js)
-  $('.backlinks').remove();                   // cross-page backlinks (cross-topic links)
+  $('script').remove();                     // SPA routing / graph need a server
+  $('link[rel="modulepreload"]').remove();  // preloads for removed scripts
+  $('.explorer.desktop-only').remove();     // full site navigation tree
+  $('.search').remove();                    // search (non-functional offline)
+  $('.graph-outer').remove();               // knowledge graph (needs JS)
+  $('.backlinks').remove();                 // cross-page backlinks
+
+  // Fix <link> hrefs: strip ../ from root-level resources (index.css, static/)
+  $('link[href]').each((_, el) => {
+    const href = $(el).attr('href');
+    if (!href || href.startsWith('http://') || href.startsWith('https://')) return;
+    if (href.startsWith('../')) $(el).attr('href', stripParent(href));
+  });
+
+  // Fix <img> srcs
+  $('img[src]').each((_, el) => {
+    const src = $(el).attr('src');
+    if (!src || src.startsWith('http://') || src.startsWith('https://')) return;
+    if (src.startsWith('../')) $(el).attr('src', stripParent(src));
+    else if (src.startsWith('/static/')) $(el).attr('src', src.slice(1)); // /static/X → static/X
+  });
 
   // Rewrite anchor hrefs
   const absPrefix = `/${topicSlug}`;
@@ -60,7 +81,6 @@ function rewriteHtml(html, topicSlug) {
     const href = $(el).attr('href');
     if (!href) return;
 
-    // External URLs, fragments, mailto → leave unchanged
     if (href.startsWith('http://') || href.startsWith('https://') ||
         href.startsWith('#') || href.startsWith('mailto:')) return;
 
@@ -99,26 +119,24 @@ function buildTopicExport(quartzOutput, topicSlug, res) {
       const topicDir = path.join(quartzOutput, topicSlug);
       const staticDir = path.join(quartzOutput, 'static');
 
-      // Topic files at topicSlug/ in the ZIP — preserves the relative ../X paths
-      // that Quartz generates for root-level assets (index.css, static/)
+      // HTML files at ZIP root — then fix paths that Quartz generated relative to topicSlug/
       await walkDir(topicDir, '', async (fullPath, relPath) => {
         const normalizedRel = relPath.replace(/\\/g, '/');
-        const zipPath = `${topicSlug}/${normalizedRel}`;
         if (fullPath.endsWith('.html')) {
           const html = await fs.readFile(fullPath, 'utf8');
-          archive.append(rewriteHtml(html, topicSlug), { name: zipPath });
+          archive.append(rewriteHtml(html, topicSlug), { name: normalizedRel });
         } else {
-          archive.file(fullPath, { name: zipPath });
+          archive.file(fullPath, { name: normalizedRel });
         }
       });
 
-      // Root-level CSS — linked as ../index.css from within topicSlug/
+      // Root-level CSS alongside the HTML files (Quartz links it as ../index.css → index.css)
       const rootCss = path.join(quartzOutput, 'index.css');
       if (await fs.pathExists(rootCss)) {
         archive.file(rootCss, { name: 'index.css' });
       }
 
-      // Static assets — linked as ../static/X from within topicSlug/
+      // Static assets directory (Quartz links as ../static/X → static/X)
       if (await fs.pathExists(staticDir)) {
         await walkDir(staticDir, 'static', async (fullPath, relPath) => {
           archive.file(fullPath, { name: relPath.replace(/\\/g, '/') });
