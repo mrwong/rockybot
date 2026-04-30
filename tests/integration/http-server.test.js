@@ -49,7 +49,7 @@ function request(server, method, urlPath) {
 
 let tmpDir, vaultPath, quartzOutput, server;
 
-beforeAll(() => {
+beforeAll(() => new Promise((resolve) => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rockybot-http-'));
   vaultPath = path.join(tmpDir, 'vault');
   quartzOutput = path.join(tmpDir, 'quartz-output');
@@ -68,7 +68,8 @@ beforeAll(() => {
   fs.mkdirpSync(path.join(quartzOutput, 'valid-topic'));
 
   server = createExportServer(0, quartzOutput, vaultPath); // port 0 = random
-});
+  server.on('listening', resolve);
+}));
 
 afterAll((done) => {
   server.close(() => {

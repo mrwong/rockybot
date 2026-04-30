@@ -5,7 +5,8 @@
   "description": "Development root — test runner and tooling for rockybot",
   "scripts": {
     "test": "jest tests/unit",
-    "test:integration": "jest tests/integration --runInBand --passWithNoTests"
+    "test:integration": "jest tests/integration --runInBand --passWithNoTests",
+    "test:integration:docker": "docker compose -f docker-compose.test.yml run --rm tests"
   },
   "devDependencies": {
     "jest": "^29.0.0",
