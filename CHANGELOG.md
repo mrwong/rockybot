@@ -2,16 +2,27 @@
 
 All notable changes to rockybot are documented here. Version numbers follow [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`. Documentation-only changes do not increment the version.
 
-## [Unreleased]
+## [1.1.0] — 2026-04-29
 
 ### Added
-- Topic export: published topics now have a "⬇ Export ZIP" link on the notes-web root index. Clicking it generates and downloads a self-contained HTML ZIP (topic pages + Quartz CSS/JS assets) that works offline. Cross-topic links are neutered with a tooltip. Export is on-demand via an HTTP server in the bridge container (port 3001) proxied through nginx; slug format gate, publish-list whitelist (read fresh per request), Quartz output existence check, and a per-topic concurrency guard (429) prevent misuse.
-- Integration test suite (49 tests) covering `getPublishedTopics`, `rewriteHtml`/`buildTopicExport` (ZIP structure and HTML rewriting), and the HTTP export server (routing, slug format gate, publish whitelist, 503 on missing Quartz output, 429 concurrency guard). Run locally with `npm run test:integration:docker` — no host Node.js required.
+
+- **Topic export.** Published topics now have a "⬇ Export ZIP" link on the notes-web root index. Clicking it streams a self-contained ZIP containing all rendered HTML pages for the topic plus the Quartz CSS, JS, and font assets — fully usable offline. Cross-topic links are neutered and shown as plain text with a tooltip. The export server lives in the bridge container on port 3001, proxied through nginx. Security gates applied in order: slug format check (`[a-z0-9-]+` only), publish-list whitelist (re-read from vault on every request — unpublishing a topic blocks exports immediately), Quartz output existence check (503 if not yet built), and a per-topic concurrency guard (429 if already in progress).
+
+- **Interactive Discord auth.** When `CLAUDE_SUBSCRIPTION_MODE=true` and subscription auth fails, the bot now pauses the failing task and posts a clickable OAuth button to Discord instead of immediately falling back to the API key. Completing the login from a phone or browser resumes the task under subscription billing. Configure with `DISCORD_INTERACTIVE_AUTH=true`, `DISCORD_BOT_TOKEN`, and `DISCORD_CHANNEL_ID`. A configurable timeout (`DISCORD_AUTH_TIMEOUT_MINUTES`, default 5) triggers automatic API key fallback if no one responds.
+
+- **Version endpoint.** `GET /version` on the bridge (proxied at `https://notes.yourdomain/version`) returns `{"version":"x.y.z"}` baked from the image's `package.json`. Useful for verifying which image version is live after a deploy before smoke-testing.
+
+- **Integration test suite** (50 tests, no Claude API key required). Covers the three major surface areas of obsidian-bridge: `getPublishedTopics` vault scanning and publish-flag filtering; `rewriteHtml`/`buildTopicExport` HTML rewriting and ZIP structure; and the HTTP export server's routing, slug format gate, publish whitelist, 503/429 guards, and `/version` endpoint. Run with `npm run test:integration:docker` — uses a pre-baked Docker image so no host Node.js install is needed.
 
 ### Fixed
-- notes-web: clicking a topic folder in the Explorer sidebar now navigates to the topic index page instead of only toggling expand/collapse. Fix: bridge startup patches `quartz.layout.ts` to set `folderClickBehavior: "link"`.
-- notes-web: vault-absolute wikilinks containing the `research/` URL prefix (e.g. `/research/my-topic/page`) now resolve correctly instead of returning 404. Fix: nginx rewrites `/research/*` → `/*`.
-- Export: in-progress lock was never released on client disconnect, permanently blocking re-export of that topic until the bridge restarted. Fix: `req.on('close')` clears the lock immediately on disconnect.
+
+- **notes-web: Explorer navigation.** Clicking a topic folder in the sidebar now navigates to the topic's index page instead of only toggling the expand/collapse state. Fix: bridge startup patches `quartz.layout.ts` at runtime to set `folderClickBehavior: "link"`.
+
+- **notes-web: `/research/` 404s.** Vault notes use vault-absolute wikilinks that include a `research/` prefix in the rendered URL (e.g. `/research/my-topic/sub-page`). These returned 404 because the Quartz output tree doesn't include that prefix. Fix: nginx rewrites `/research/*` → `/*` before serving.
+
+- **Export: lock held after client disconnect.** If a browser navigated away or timed out mid-download, the in-progress lock for that topic was never released, blocking all further exports until the bridge restarted. Fix: `req.on('close')` clears the lock immediately on disconnect.
+
+- **Notifications: Discord webhook redirects.** Discord webhooks occasionally return a redirect. The `curl` call was not following redirects, silently dropping notifications. Fix: added `-L` flag.
 
 ## [1.0.1] — 2026-04-28
 
