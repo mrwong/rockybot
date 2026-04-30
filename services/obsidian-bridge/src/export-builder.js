@@ -19,83 +19,61 @@ async function walkDir(dirPath, baseRel, callback) {
   }
 }
 
-function rewriteHtml(html, topicSlug, depth) {
+// Converts a within-topic href (relative ../topicSlug/X or absolute /topicSlug/X)
+// to a same-directory relative .html path for use inside the ZIP.
+function rewriteTopicLink(href, topicSlug) {
+  const absPrefix = `/${topicSlug}`;
+  const relPrefix = `../${topicSlug}`;
+
+  let rest;
+  if (href.startsWith(relPrefix)) rest = href.slice(relPrefix.length);
+  else if (href.startsWith(absPrefix)) rest = href.slice(absPrefix.length);
+  else return null;
+
+  let fragment = '';
+  const hashIdx = rest.indexOf('#');
+  if (hashIdx !== -1) { fragment = rest.slice(hashIdx); rest = rest.slice(0, hashIdx); }
+  rest = rest.replace(/^\/|\/$/g, '');
+
+  if (!rest || rest === 'index') return `./index.html${fragment}`;
+  if (!path.extname(rest)) return `./${rest}.html${fragment}`;
+  return `./${rest}${fragment}`;
+}
+
+function rewriteHtml(html, topicSlug) {
   const $ = cheerio.load(html, { decodeEntities: false });
-  const prefix = '../'.repeat(depth);
-  const topicPrefix = `/${topicSlug}`;
 
-  // Remove <base> tag — we use explicit relative paths throughout
+  // Remove elements that don't work or make sense in an offline ZIP export
   $('base').remove();
+  $('script').remove();                       // SPA routing, graph, search — all need a server
+  $('link[rel="modulepreload"]').remove();    // preloads for removed scripts
+  $('.explorer.desktop-only').remove();       // full site navigation tree
+  $('.search').remove();                      // search bar (non-functional offline)
+  $('.graph-outer').remove();                 // knowledge graph (needs postscript.js)
+  $('.backlinks').remove();                   // cross-page backlinks (cross-topic links)
 
-  function rewriteStaticSrc(p) {
-    return prefix + p.slice(1); // /static/foo.js → {prefix}static/foo.js
-  }
+  // Rewrite anchor hrefs
+  const absPrefix = `/${topicSlug}`;
+  const relPrefix = `../${topicSlug}`;
 
-  function rewriteTopicHref(href, isPageLink) {
-    let rest = href.slice(topicPrefix.length); // strip /topicSlug prefix
-
-    let fragment = '';
-    const hashIdx = rest.indexOf('#');
-    if (hashIdx !== -1) {
-      fragment = rest.slice(hashIdx);
-      rest = rest.slice(0, hashIdx);
-    }
-
-    rest = rest.replace(/^\/|\/$/g, ''); // strip leading/trailing slashes
-
-    if (!rest || rest === 'index') {
-      return `${prefix}index.html${fragment}`;
-    }
-    // Clean URL (no file extension) → Quartz page → append /index.html
-    if (isPageLink && !path.extname(rest)) {
-      return `${prefix}${rest}/index.html${fragment}`;
-    }
-    // Has extension (image, PDF, etc.) → resource file
-    return `${prefix}${rest}${fragment}`;
-  }
-
-  // Static asset src (scripts, images)
-  $('script[src], img[src]').each((_, el) => {
-    const src = $(el).attr('src');
-    if (src && src.startsWith('/static/')) {
-      $(el).attr('src', rewriteStaticSrc(src));
-    }
-  });
-
-  // link href (stylesheets, preloads, fonts)
-  $('link[href]').each((_, el) => {
-    const href = $(el).attr('href');
-    if (href && href.startsWith('/static/')) {
-      $(el).attr('href', rewriteStaticSrc(href));
-    }
-  });
-
-  // Anchor links
   $('a[href]').each((_, el) => {
     const href = $(el).attr('href');
     if (!href) return;
 
-    // External URLs and fragment-only links — leave unchanged
+    // External URLs, fragments, mailto → leave unchanged
     if (href.startsWith('http://') || href.startsWith('https://') ||
-        href.startsWith('#') || href.startsWith('mailto:')) {
+        href.startsWith('#') || href.startsWith('mailto:')) return;
+
+    // Within-topic: ../topicSlug/... or /topicSlug/...
+    if (href === relPrefix || href.startsWith(`${relPrefix}/`) || href.startsWith(`${relPrefix}#`) ||
+        href === absPrefix || href.startsWith(`${absPrefix}/`) || href.startsWith(`${absPrefix}#`)) {
+      const local = rewriteTopicLink(href, topicSlug);
+      if (local) $(el).attr('href', local);
       return;
     }
 
-    if (href.startsWith('/static/')) {
-      $(el).attr('href', rewriteStaticSrc(href));
-      return;
-    }
-
-    // Within-topic links: /topicSlug, /topicSlug/, /topicSlug/page, /topicSlug#anchor
-    if (href === topicPrefix ||
-        href.startsWith(`${topicPrefix}/`) ||
-        href.startsWith(`${topicPrefix}#`)) {
-      $(el).attr('href', rewriteTopicHref(href, true));
-      return;
-    }
-
-    // Cross-topic absolute links — neuter: remove href, keep text, add tooltip
-    if (href.startsWith('/')) {
+    // Everything else (cross-topic, site root, tags, search) → neuter
+    if (href.startsWith('/') || href.startsWith('../') || href.startsWith('./') || href === '.') {
       $(el).removeAttr('href');
       $(el).attr('title', 'External topic (not included in export)');
       $(el).addClass('export-external-link');
@@ -121,18 +99,26 @@ function buildTopicExport(quartzOutput, topicSlug, res) {
       const topicDir = path.join(quartzOutput, topicSlug);
       const staticDir = path.join(quartzOutput, 'static');
 
+      // Topic files at topicSlug/ in the ZIP — preserves the relative ../X paths
+      // that Quartz generates for root-level assets (index.css, static/)
       await walkDir(topicDir, '', async (fullPath, relPath) => {
         const normalizedRel = relPath.replace(/\\/g, '/');
+        const zipPath = `${topicSlug}/${normalizedRel}`;
         if (fullPath.endsWith('.html')) {
-          const depth = normalizedRel.split('/').length - 1;
           const html = await fs.readFile(fullPath, 'utf8');
-          const rewritten = rewriteHtml(html, topicSlug, depth);
-          archive.append(rewritten, { name: normalizedRel });
+          archive.append(rewriteHtml(html, topicSlug), { name: zipPath });
         } else {
-          archive.file(fullPath, { name: normalizedRel });
+          archive.file(fullPath, { name: zipPath });
         }
       });
 
+      // Root-level CSS — linked as ../index.css from within topicSlug/
+      const rootCss = path.join(quartzOutput, 'index.css');
+      if (await fs.pathExists(rootCss)) {
+        archive.file(rootCss, { name: 'index.css' });
+      }
+
+      // Static assets — linked as ../static/X from within topicSlug/
       if (await fs.pathExists(staticDir)) {
         await walkDir(staticDir, 'static', async (fullPath, relPath) => {
           archive.file(fullPath, { name: relPath.replace(/\\/g, '/') });
