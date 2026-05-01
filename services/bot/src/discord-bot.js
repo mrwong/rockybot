@@ -11,8 +11,9 @@ const logger = require('./logger');
 const INTERACTIVE_AUTH   = (process.env.DISCORD_INTERACTIVE_AUTH || '').toLowerCase() === 'true';
 const BOT_TOKEN          = process.env.DISCORD_BOT_TOKEN  || '';
 const CHANNEL_ID         = process.env.DISCORD_CHANNEL_ID || '';
-const TIMEOUT_MINUTES    = parseInt(process.env.DISCORD_AUTH_TIMEOUT_MINUTES || '5', 10);
-const TIMEOUT_MS         = TIMEOUT_MINUTES * 60 * 1000;
+const TIMEOUT_MINUTES        = parseInt(process.env.DISCORD_AUTH_TIMEOUT_MINUTES || '5', 10);
+const TIMEOUT_MS             = TIMEOUT_MINUTES * 60 * 1000;
+const RATE_LIMIT_TIMEOUT_MS  = 24 * 60 * 60 * 1000;
 
 let client = null;
 let pendingDecision = null;  // { resolve, timeoutId, messageRef }
@@ -52,6 +53,14 @@ async function init() {
       await safeUpdate(interaction, responseText, []);
       resolve('retry-subscription');
     } else if (id === 'auth-api-key') {
+      responseText = '💰 Using API key for this task.';
+      await safeUpdate(interaction, responseText, []);
+      resolve('use-api-key');
+    } else if (id === 'rate-limit-wait') {
+      responseText = '⏳ Holding until rate limit resets.';
+      await safeUpdate(interaction, responseText, []);
+      resolve('wait-for-reset');
+    } else if (id === 'rate-limit-api-key') {
       responseText = '💰 Using API key for this task.';
       await safeUpdate(interaction, responseText, []);
       resolve('use-api-key');
@@ -134,4 +143,55 @@ async function safeUpdate(interaction, content, components) {
   }
 }
 
-module.exports = { init, isEnabled, askAuthDecision };
+// Posts a rate-limit decision message to Discord and waits for the user to choose
+// "Wait for reset" or "Use API Key".  Times out after 24h (falls back to API key).
+// Returns: 'wait-for-reset' | 'use-api-key'
+// Never rejects — errors fall back to 'use-api-key'.
+async function askRateLimitDecision(label, resetTime) {
+  if (!client) return 'use-api-key';
+
+  try {
+    const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+    const channel = await client.channels.fetch(CHANNEL_ID);
+
+    const resetStr = resetTime
+      ? `Resets at **${resetTime.toUTCString()}**.`
+      : 'Reset time unknown — will retry every 30 minutes.';
+    const taskLine = label ? `\n**Task:** *${label}*` : '';
+    const content = [
+      `⏳ **rockybot: Claude usage limit reached**${taskLine}`,
+      resetStr,
+      `Bot will hold until reset. Click to override with API key (charges apply).`,
+    ].join('\n');
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('rate-limit-wait')
+        .setLabel('⏳ Wait for reset')
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId('rate-limit-api-key')
+        .setLabel('💰 Use API Key')
+        .setStyle(ButtonStyle.Danger),
+    );
+
+    const msg = await channel.send({ content, components: [row] });
+
+    return await new Promise((resolve) => {
+      const timeoutId = setTimeout(async () => {
+        if (!pendingDecision) return;
+        pendingDecision = null;
+        await msg.edit({ content: `⏱️ No response after 24h — falling back to API key.`, components: [] }).catch(() => {});
+        resolve('use-api-key');
+      }, RATE_LIMIT_TIMEOUT_MS);
+
+      pendingDecision = { resolve, timeoutId, messageRef: msg };
+    });
+
+  } catch (err) {
+    logger.warn(`discord-bot: askRateLimitDecision failed (${err.message}) — falling back to API key`);
+    return 'use-api-key';
+  }
+}
+
+module.exports = { init, isEnabled, askAuthDecision, askRateLimitDecision };

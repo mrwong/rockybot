@@ -106,4 +106,30 @@ async function notifyAuthExpired() {
     .catch(e => logger.warn(`Discord auth notify failed: ${e.message}`));
 }
 
-module.exports = { notify, notifyAuthExpired };
+// Fires when subscription billing hits the usage limit (webhook-only / non-interactive mode).
+// Never throws.
+async function notifyRateLimitHit(label, resetTime) {
+  if (!DISCORD_WEBHOOK_URL) return;
+  const resetStr = resetTime
+    ? `Resets at **${resetTime.toUTCString()}** — holding until then.`
+    : 'Reset time unknown — will retry every 30 minutes.';
+  const taskLine = label ? `\n**Task:** *${label}*` : '';
+  await sendDiscord(
+    '⏳ rockybot: Claude usage limit reached',
+    `Subscription billing is paused.${taskLine}\n${resetStr}`,
+    COLOR_WARN,
+  ).catch(e => logger.warn(`Discord rate-limit notify failed: ${e.message}`));
+}
+
+// Fires when the 24h hold expires and the bot gives up waiting. Never throws.
+async function notifyRateLimitFallback(label) {
+  if (!DISCORD_WEBHOOK_URL) return;
+  const taskLine = label ? `\n**Task:** *${label}*` : '';
+  await sendDiscord(
+    '💰 rockybot: Rate limit hold expired — using API key',
+    `Still rate-limited after 24 hours.${taskLine}\nFalling back to API key billing now.`,
+    COLOR_WARN,
+  ).catch(e => logger.warn(`Discord rate-limit fallback notify failed: ${e.message}`));
+}
+
+module.exports = { notify, notifyAuthExpired, notifyRateLimitHit, notifyRateLimitFallback };
