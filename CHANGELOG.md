@@ -2,6 +2,19 @@
 
 All notable changes to rockybot are documented here. Version numbers follow [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`. Documentation-only changes do not increment the version.
 
+## [1.1.1] — 2026-04-30
+
+### Fixed
+
+- **Subscription usage limit now notifies Discord and holds instead of silently falling back.** Previously, hitting the Claude Pro/Max daily usage limit caused the bot to silently switch to API key billing without any notification. Root cause: Claude CLI emits "You've hit your limit · resets 7am (UTC)" on **stdout** (not stderr), so the error classifier missed it entirely and routed the failure to the auth handler, which then failed trying to run an OAuth login flow against a rate-limit error.
+
+  New behavior when `CLAUDE_SUBSCRIPTION_MODE=true` and the usage limit is hit:
+
+  - **Interactive mode** (`DISCORD_INTERACTIVE_AUTH=true`): posts a Discord message with two buttons — **⏳ Wait for reset** and **💰 Use API Key**. Bot holds the mutex until the user responds. Clicking "Wait" causes the bot to sleep until the parsed reset time (e.g. "7am UTC"), then automatically retry subscription billing. Clicking "Use API Key" falls back to paid billing immediately.
+  - **Webhook-only mode**: posts a Discord embed and auto-waits for the reset time without requiring user input.
+  - **24h hard cap**: if still rate-limited after 24 hours, posts another notification and falls back to the API key.
+  - Reset time is parsed directly from the CLI error message ("resets 7am (UTC)") so the bot sleeps to the exact reset moment.
+
 ## [1.1.0] — 2026-04-29
 
 ### Added

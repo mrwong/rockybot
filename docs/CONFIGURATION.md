@@ -18,7 +18,7 @@ All configuration is via environment variables. Copy `.env.example` to `.env` an
 
 | Variable | Default | Description |
 |---|---|---|
-| `CLAUDE_SUBSCRIPTION_MODE` | `false` | Set to `true` to use Claude Pro/Max subscription billing first, falling back to API key on auth errors or rate limits. Requires mounting `~/.claude` into the container. |
+| `CLAUDE_SUBSCRIPTION_MODE` | `false` | Set to `true` to use Claude Pro/Max subscription billing first. On auth failure: enters the interactive Discord flow (if enabled) or falls back to API key. On usage limit: holds and waits for the daily reset (with Discord notification), then retries subscription automatically. Requires mounting `~/.claude` into the container. |
 
 ## Polling
 
@@ -65,7 +65,10 @@ All notification variables are optional. If left blank, that notification channe
 
 ### Interactive Discord auth (optional)
 
-When `DISCORD_INTERACTIVE_AUTH=true` and subscription auth fails, the bot pauses the failing task, spawns `claude login` headlessly to obtain an OAuth URL, and posts it to Discord as a clickable button. You can re-authorize Claude from your phone or browser without SSH-ing into the host. After the timeout the task auto-falls back to the API key.
+When `DISCORD_INTERACTIVE_AUTH=true` and a subscription issue occurs, the bot pauses the failing task and posts an interactive Discord message instead of silently switching to the API key. Two scenarios:
+
+- **Auth failure**: spawns `claude login` headlessly, posts the OAuth URL as a clickable button. Re-authorize from your phone, click **Done**, and the task resumes under subscription billing. Times out after `DISCORD_AUTH_TIMEOUT_MINUTES` (default 5) and falls back to API key.
+- **Usage limit hit**: posts buttons to **Wait for reset** (holds until daily reset, then auto-retries) or **Use API Key** (charges apply). No short timeout — holds until you respond, up to 24 hours.
 
 Requires a Discord **bot token** (not just a webhook) and the bot to be added to your server. See [NOTIFICATIONS.md](NOTIFICATIONS.md#interactive-discord-auth) for setup.
 
@@ -73,8 +76,8 @@ Requires a Discord **bot token** (not just a webhook) and the bot to be added to
 |---|---|---|
 | `DISCORD_INTERACTIVE_AUTH` | `false` | Set to `true` to enable. Requires `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID`. Only meaningful when `CLAUDE_SUBSCRIPTION_MODE=true`. |
 | `DISCORD_BOT_TOKEN` | — | Discord bot token from the Developer Portal. |
-| `DISCORD_CHANNEL_ID` | — | ID of the channel where auth prompts are posted. |
-| `DISCORD_AUTH_TIMEOUT_MINUTES` | `5` | Minutes to wait for a user response before auto-falling back to the API key. |
+| `DISCORD_CHANNEL_ID` | — | ID of the channel where auth and rate-limit prompts are posted. |
+| `DISCORD_AUTH_TIMEOUT_MINUTES` | `5` | Minutes to wait for a response on **auth** prompts before auto-falling back to API key. Does not apply to usage-limit prompts (those hold for up to 24 hours). |
 
 ### WhatsApp via Twilio
 

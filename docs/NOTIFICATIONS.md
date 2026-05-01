@@ -1,6 +1,6 @@
 # Notifications
 
-rockybot can send notifications when watchers complete (or fail) and when the Claude subscription session expires. Both channels are optional — if not configured, the bot runs silently.
+rockybot can send notifications when watchers complete (or fail) and when Claude subscription billing encounters an issue. Both channels are optional — if not configured, the bot runs silently.
 
 ## Discord
 
@@ -22,6 +22,7 @@ DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 - **Lint complete** — when a lint pass finishes
 - **Error** — when any watcher fails (includes error message)
 - **Claude auth expired** — when subscription mode fails with an auth error and `DISCORD_INTERACTIVE_AUTH=false` (throttled to max 2 alerts per day; bot automatically retries with API key)
+- **Usage limit reached** — when the Claude subscription daily limit is hit and `DISCORD_INTERACTIVE_AUTH=false`; the bot holds and auto-waits for the reset time, then posts again if it gives up after 24 hours (see [Interactive rate-limit hold](#interactive-rate-limit-hold) for the interactive version)
 
 ### Embed format
 
@@ -40,6 +41,19 @@ When `DISCORD_INTERACTIVE_AUTH=true` and the Claude subscription session expires
 After `DISCORD_AUTH_TIMEOUT_MINUTES` (default 5) the task auto-falls back to the API key.
 
 This lets you re-auth Claude from your phone without SSH-ing into the Docker host.
+
+## Interactive rate-limit hold
+
+When `DISCORD_INTERACTIVE_AUTH=true` and the Claude subscription **usage limit** is hit (e.g. Pro/Max daily cap), rockybot posts a different interactive message with two buttons:
+
+- **⏳ Wait for reset** — bot holds the current task, sleeps until the reset time embedded in the error message (e.g. "7am UTC"), then automatically retries with subscription billing
+- **💰 Use API Key** — falls back to paid API key billing immediately (charges apply)
+
+Unlike the auth flow there is no short timeout — the bot holds indefinitely until you respond, up to a 24-hour hard cap. If still rate-limited after 24 hours, the bot posts a final notification and falls back to the API key.
+
+**Webhook-only mode** (`DISCORD_INTERACTIVE_AUTH=false`): the bot posts an embed saying the limit was hit and the expected reset time, then auto-waits without requiring any user input. The same 24-hour cap applies.
+
+> **Why this matters:** Without this, the bot silently burned paid API budget every time the subscription limit reset — there was no way to know it had switched to pay-per-use.
 
 ### Setup
 
