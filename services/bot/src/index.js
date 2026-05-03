@@ -64,10 +64,12 @@ async function main() {
 
   await seedVault(vaultPath);
 
+  // Webhook is the reliable path — always fires if DISCORD_WEBHOOK_URL is set,
+  // independent of bot gateway state. Bot channel fires in addition if interactive
+  // mode is active (covers setups where only a bot token is configured, no webhook).
+  await notifier.notifyStartup(version);
   if (discordBot.isEnabled()) {
     await discordBot.broadcastStartup(version);
-  } else {
-    await notifier.notifyStartup(version);
   }
 
   if (isHoldActive()) {
