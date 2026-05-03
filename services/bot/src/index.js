@@ -1,7 +1,9 @@
 'use strict';
 
 const logger = require('./logger');
+const { version }             = require('../package.json');
 const discordBot              = require('./discord-bot');
+const notifier                = require('./notifier');
 const { seedVault }           = require('./seeder');
 const { scanInbox, expediteItem } = require('./inbox-watcher');
 const { isHoldActive }        = require('./research-gate');
@@ -61,6 +63,12 @@ async function main() {
   });
 
   await seedVault(vaultPath);
+
+  if (discordBot.isEnabled()) {
+    await discordBot.broadcastStartup(version);
+  } else {
+    await notifier.notifyStartup(version);
+  }
 
   if (isHoldActive()) {
     logger.warn('research-gate: hold is ACTIVE on startup — inbox will not process until released');

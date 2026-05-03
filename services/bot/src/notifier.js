@@ -145,4 +145,14 @@ async function notifyQuietHoursItemWebhook(filename) {
   ).catch(e => logger.warn(`Discord quiet-hours notify failed: ${e.message}`));
 }
 
-module.exports = { notify, notifyAuthExpired, notifyRateLimitHit, notifyRateLimitFallback, notifyQuietHoursItemWebhook };
+// Fires once at container startup. Never throws.
+async function notifyStartup(version) {
+  if (!DISCORD_WEBHOOK_URL) return;
+  await sendDiscord(
+    `🤖 rockybot v${version} started`,
+    'Bot is online and polling.',
+    COLOR_SUCCESS,
+  ).catch(e => logger.warn(`Discord startup notify failed: ${e.message}`));
+}
+
+module.exports = { notify, notifyAuthExpired, notifyRateLimitHit, notifyRateLimitFallback, notifyQuietHoursItemWebhook, notifyStartup };

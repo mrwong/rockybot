@@ -297,4 +297,15 @@ async function notifyQuietHoursItem(filename) {
   }
 }
 
-module.exports = { init, isEnabled, setExpediteHandler, askAuthDecision, askRateLimitDecision, notifyQuietHoursItem };
+// Posts a plain startup message to the bot channel. Never throws.
+async function broadcastStartup(version) {
+  if (!client) return;
+  try {
+    const channel = await client.channels.fetch(CHANNEL_ID);
+    await channel.send(`🤖 **rockybot v${version}** started — online and polling.`);
+  } catch (err) {
+    logger.warn(`discord-bot: broadcastStartup failed (${err.message})`);
+  }
+}
+
+module.exports = { init, isEnabled, setExpediteHandler, askAuthDecision, askRateLimitDecision, notifyQuietHoursItem, broadcastStartup };
