@@ -15,7 +15,8 @@ const TIMEOUT_MINUTES        = parseInt(process.env.DISCORD_AUTH_TIMEOUT_MINUTES
 const TIMEOUT_MS             = TIMEOUT_MINUTES * 60 * 1000;
 const RATE_LIMIT_TIMEOUT_MS  = 24 * 60 * 60 * 1000;
 
-let client = null;
+let client  = null;
+let channel = null;  // pre-fetched at init(); reused by all senders
 let pendingDecision = null;  // { resolve, timeoutId, messageRef }
 let expediteHandler = null;  // registered by index.js via setExpediteHandler
 
@@ -117,7 +118,15 @@ async function init() {
     else if (text === '!research status')  await handleStatusCommand(message);
   });
 
-  await client.login(BOT_TOKEN);
+  // Wait for the `ready` event — login() only resolves when the auth request
+  // is sent, not when the gateway handshake completes. Calling channel.send()
+  // before ready causes silent failures.
+  await new Promise((resolve, reject) => {
+    client.once('ready', resolve);
+    client.login(BOT_TOKEN).catch(reject);
+  });
+
+  channel = await client.channels.fetch(CHANNEL_ID);
   logger.info('discord-bot: ready');
 }
 
@@ -162,8 +171,6 @@ async function askAuthDecision(label, oauthUrl, loginProc) {
 
   try {
     const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-
-    const channel = await client.channels.fetch(CHANNEL_ID);
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -229,7 +236,6 @@ async function askRateLimitDecision(label, resetTime) {
 
   try {
     const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-    const channel = await client.channels.fetch(CHANNEL_ID);
 
     const resetStr = resetTime
       ? `Resets at **${resetTime.toUTCString()}**.`
@@ -278,7 +284,6 @@ async function notifyQuietHoursItem(filename) {
   if (!client) return;
   try {
     const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-    const channel     = await client.channels.fetch(CHANNEL_ID);
     const displayName = filename.replace(/\.md$/, '').replace(/-/g, ' ');
 
     const row = new ActionRowBuilder().addComponents(
@@ -301,7 +306,6 @@ async function notifyQuietHoursItem(filename) {
 async function broadcastStartup(version) {
   if (!client) return;
   try {
-    const channel = await client.channels.fetch(CHANNEL_ID);
     await channel.send(`🤖 **rockybot v${version}** started — online and polling.`);
   } catch (err) {
     logger.warn(`discord-bot: broadcastStartup failed (${err.message})`);
