@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.6",
+  "checkpoint_id": "e327f2804408",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "tests/unit/discord-bot.test.js"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e3/27f2804408/0/metadata.json",
+      "transcript": "/e3/27f2804408/0/full.jsonl",
+      "content_hash": "/e3/27f2804408/0/content_hash.txt",
+      "prompt": "/e3/27f2804408/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 24,
+    "cache_creation_tokens": 36240,
+    "cache_read_tokens": 2358261,
+    "output_tokens": 22384,
+    "api_call_count": 20
+  }
+}
