@@ -1,0 +1,13 @@
+/redeploy
+
+---
+
+commit and increment the changelog and merge to main?
+
+---
+
+actually on secodn thought commit increment changelog on dev. i'll make the decisiont o merge to main after i validate it works on homelab
+
+---
+
+continue
