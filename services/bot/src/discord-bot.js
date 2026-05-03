@@ -17,9 +17,16 @@ const RATE_LIMIT_TIMEOUT_MS  = 24 * 60 * 60 * 1000;
 
 let client = null;
 let pendingDecision = null;  // { resolve, timeoutId, messageRef }
+let expediteHandler = null;  // registered by index.js via setExpediteHandler
 
 function isEnabled() {
   return INTERACTIVE_AUTH && !!client;
+}
+
+// Registers the callback invoked when the user clicks an Expedite button.
+// Wired in index.js to avoid a circular dependency between discord-bot and inbox-watcher.
+function setExpediteHandler(fn) {
+  expediteHandler = fn;
 }
 
 // Call once at startup when DISCORD_INTERACTIVE_AUTH=true.
@@ -32,10 +39,37 @@ async function init() {
   // Lazy-require discord.js so non-interactive mode has zero overhead.
   const { Client, GatewayIntentBits } = require('discord.js');
 
-  client = new Client({ intents: [GatewayIntentBits.Guilds] });
+  client = new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.MessageContent,
+    ],
+  });
 
   client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
+
+    // ---- Per-item expedite (fire-and-forget, no pendingDecision involved) ----
+    if (interaction.customId.startsWith('research_expedite:')) {
+      const filename = interaction.customId.slice('research_expedite:'.length);
+      await interaction.deferUpdate().catch(() => {});
+      if (expediteHandler) {
+        try {
+          await expediteHandler(filename);
+          const displayName = filename.replace(/\.md$/, '').replace(/-/g, ' ');
+          await interaction.editReply({ content: `▶️ Expediting *${displayName}*…`, components: [] }).catch(() => {});
+        } catch (err) {
+          logger.warn(`discord-bot: expedite handler failed (${err.message})`);
+          await interaction.editReply({ content: '⚠️ Expedite failed — check bot logs.', components: [] }).catch(() => {});
+        }
+      } else {
+        await interaction.editReply({ content: '⚠️ Expedite handler not registered.', components: [] }).catch(() => {});
+      }
+      return;
+    }
+
+    // ---- Auth / rate-limit decisions (block until user acts) -----------------
     if (!pendingDecision) {
       await interaction.reply({ content: 'No pending auth decision.', ephemeral: true }).catch(() => {});
       return;
@@ -72,8 +106,51 @@ async function init() {
     }
   });
 
+  // ---- Text commands (!research hold / release / status) -------------------
+  // Requires "Message Content Intent" in the Discord developer portal.
+  client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+    if (message.channelId !== CHANNEL_ID) return;
+    const text = message.content.trim().toLowerCase();
+    if      (text === '!research hold')    await handleHoldCommand(message, true);
+    else if (text === '!research release') await handleHoldCommand(message, false);
+    else if (text === '!research status')  await handleStatusCommand(message);
+  });
+
   await client.login(BOT_TOKEN);
   logger.info('discord-bot: ready');
+}
+
+async function handleHoldCommand(message, activate) {
+  const researchGate = require('./research-gate');
+  try {
+    if (activate && researchGate.isHoldActive()) {
+      await message.reply('Research is already on hold.').catch(() => {});
+      return;
+    }
+    if (!activate && !researchGate.isHoldActive()) {
+      await message.reply('Research is not currently on hold.').catch(() => {});
+      return;
+    }
+    await researchGate.setHold(activate);
+    const reply = activate
+      ? 'Research processing paused. Use `!research release` to resume.'
+      : 'Research processing resumed.';
+    await message.reply(reply).catch(() => {});
+    logger.info(`discord-bot: research hold ${activate ? 'activated' : 'released'} via Discord`);
+  } catch (err) {
+    logger.warn(`discord-bot: hold command failed (${err.message})`);
+    await message.reply('Failed to update hold state — check bot logs.').catch(() => {});
+  }
+}
+
+async function handleStatusCommand(message) {
+  const researchGate = require('./research-gate');
+  const holdActive = researchGate.isHoldActive();
+  const gateReason = researchGate.researchGateReason();
+  const holdLine   = holdActive ? '🔴 Hold: **active**' : '🟢 Hold: inactive';
+  const gateLine   = gateReason ? `Gate: \`${gateReason}\`` : 'Gate: clear';
+  await message.reply(`${holdLine}\n${gateLine}`).catch(() => {});
 }
 
 // Posts an auth decision message to DISCORD_CHANNEL_ID and waits for the user
@@ -194,4 +271,30 @@ async function askRateLimitDecision(label, resetTime) {
   }
 }
 
-module.exports = { init, isEnabled, askAuthDecision, askRateLimitDecision };
+// Sends a fire-and-forget notification for a new inbox item queued during quiet hours.
+// Includes an Expedite button so the user can promote the item immediately.
+// Never rejects.
+async function notifyQuietHoursItem(filename) {
+  if (!client) return;
+  try {
+    const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+    const channel     = await client.channels.fetch(CHANNEL_ID);
+    const displayName = filename.replace(/\.md$/, '').replace(/-/g, ' ');
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`research_expedite:${filename}`)
+        .setLabel('▶️ Run now')
+        .setStyle(ButtonStyle.Primary),
+    );
+
+    await channel.send({
+      content: `📥 **Research queued** (quiet hours active): *${displayName}*\nClick to run immediately.`,
+      components: [row],
+    });
+  } catch (err) {
+    logger.warn(`discord-bot: notifyQuietHoursItem failed (${err.message})`);
+  }
+}
+
+module.exports = { init, isEnabled, setExpediteHandler, askAuthDecision, askRateLimitDecision, notifyQuietHoursItem };

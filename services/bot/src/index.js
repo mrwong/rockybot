@@ -1,10 +1,11 @@
 'use strict';
 
 const logger = require('./logger');
-const discordBot         = require('./discord-bot');
-const { seedVault }      = require('./seeder');
-const { scanInbox }      = require('./inbox-watcher');
-const { scanAmendments } = require('./amend-watcher');
+const discordBot              = require('./discord-bot');
+const { seedVault }           = require('./seeder');
+const { scanInbox, expediteItem } = require('./inbox-watcher');
+const { isHoldActive }        = require('./research-gate');
+const { scanAmendments }      = require('./amend-watcher');
 const { scanExpands }    = require('./expand-watcher');
 const { scanRevisions }  = require('./revise-watcher');
 const { scanLint }       = require('./lint-watcher');
@@ -53,7 +54,18 @@ async function main() {
   if (process.env.DRY_RUN === 'true') logger.info('DRY_RUN=true — watchers will detect but not call Claude');
 
   await discordBot.init();
+
+  discordBot.setExpediteHandler(async (filename) => {
+    await expediteItem(filename);
+    await pollAll();
+  });
+
   await seedVault(vaultPath);
+
+  if (isHoldActive()) {
+    logger.warn('research-gate: hold is ACTIVE on startup — inbox will not process until released');
+  }
+
   await pollAll();
   setInterval(pollAll, INBOX_POLL_MS);
 }

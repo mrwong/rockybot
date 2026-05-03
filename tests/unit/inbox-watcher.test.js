@@ -13,6 +13,15 @@ status: pending
 # My topic
 `;
 
+  const EXPEDITED_FRONTMATTER = `---
+tags: [research-request]
+created: 2026-01-01
+status: expedited
+---
+
+# My topic
+`;
+
   const DRAFT_FRONTMATTER = `---
 tags: [research-request]
 status: draft
@@ -27,6 +36,11 @@ status: pending
 
   it('detects status: pending in frontmatter', () => {
     const match = /^status:\s*pending/m.test(PENDING_FRONTMATTER);
+    expect(match).toBe(true);
+  });
+
+  it('detects status: expedited in frontmatter', () => {
+    const match = /^status:\s*expedited/m.test(EXPEDITED_FRONTMATTER);
     expect(match).toBe(true);
   });
 

@@ -2,6 +2,25 @@
 
 All notable changes to rockybot are documented here. Version numbers follow [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`. Documentation-only changes do not increment the version.
 
+## [1.2.0] — 2026-05-02
+
+### Added
+
+- **Quiet hours gate.** Set `RESEARCH_QUIET_HOURS="HH:MM-HH:MM"` (UTC) to suppress inbox research during a time window — e.g. `09:00-18:00` to keep the subscription quota free for interactive Claude Code sessions during the work day. Midnight-spanning windows are supported (`22:00-06:00`). When a new item arrives during quiet hours, the bot sends a per-item Discord notification with an **▶️ Run now** button so you can promote individual items without lifting the gate for everything.
+
+- **Per-item expedite.** Clicking the "Run now" button on a quiet-hours notification marks that specific item `status: expedited` in its frontmatter. Expedited items always run on the next poll regardless of quiet hours, hold, or pacing state — other queued items stay back. The button triggers an immediate poll so the item runs within seconds, not at the next poll interval.
+
+- **Request pacing.** Set `RESEARCH_MIN_INTERVAL_MINUTES=N` to enforce a minimum gap between consecutive research task completions. Prevents quota bursts when several items are queued at once; each completion resets the timer.
+
+- **Discord hold toggle.** Three new text commands available in your bot channel when `DISCORD_INTERACTIVE_AUTH=true`:
+  - `!research hold` — pauses all inbox research (silent; other watchers keep running)
+  - `!research release` — resumes inbox research
+  - `!research status` — reports hold state and current gate reason
+
+  Hold state is persisted to `research/.research-hold` in the vault, so it survives bot restarts. If the bot starts with hold active it logs a warning. Requires **Message Content Intent** enabled in the Discord developer portal.
+
+- **New `expedited` frontmatter status.** Items marked `status: expedited` in `research/inbox/` are processed immediately regardless of gate state, then follow the normal completed/awaiting-input/error flow.
+
 ## [1.1.1] — 2026-04-30
 
 ### Fixed

@@ -1,6 +1,6 @@
 {
   "name": "rockybot",
-  "version": "1.0.1",
+  "version": "1.2.0",
   "description": "Self-hosted AI research assistant that watches an Obsidian vault and uses Claude to process research requests and inline tasks",
   "main": "src/index.js",
   "dependencies": {

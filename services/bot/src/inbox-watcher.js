@@ -3,8 +3,10 @@
 const fs = require('fs-extra');
 const path = require('path');
 const logger = require('./logger');
-const { runClaude } = require('./claude-runner');
-const { notify }    = require('./notifier');
+const { runClaude }  = require('./claude-runner');
+const notifier       = require('./notifier');
+const discordBot     = require('./discord-bot');
+const researchGate   = require('./research-gate');
 
 const VAULT_PATH = process.env.VAULT_PATH || '/vault';
 const INBOX     = path.join(VAULT_PATH, 'research/inbox');
@@ -77,7 +79,7 @@ async function processFile(seedFile) {
     logger.info(`Claude completed for ${filename}`);
   } catch (err) {
     logger.error(`Claude failed for ${filename}: ${err.message}`);
-    await notify({ watcher: 'research', label: filename, status: 'error', error: err.message });
+    await notifier.notify({ watcher: 'research', label: filename, status: 'error', error: err.message });
     let fc = await fs.readFile(processingFile, 'utf8');
     fc = setFrontmatterField(fc, 'status', 'error');
     const timestamp = new Date().toISOString();
@@ -92,7 +94,7 @@ async function processFile(seedFile) {
 
   if (finalStatus === 'completed') {
     logger.info(`Research complete for ${filename} — stays in processed/`);
-    await notify({ watcher: 'research', label: filename, status: 'success' });
+    await notifier.notify({ watcher: 'research', label: filename, status: 'success' });
   } else if (finalStatus === 'awaiting-input') {
     logger.info(`Clarification needed for ${filename} — moving back to inbox`);
     await fs.move(processingFile, seedFile, { overwrite: true });
@@ -100,6 +102,22 @@ async function processFile(seedFile) {
     logger.warn(`Unexpected status '${finalStatus}' for ${filename} — moving back to inbox`);
     await fs.move(processingFile, seedFile, { overwrite: true });
   }
+}
+
+// ---- Public: mark an inbox item for immediate processing --------------------
+
+async function expediteItem(filename) {
+  const seedFile = path.join(INBOX, filename);
+  let content;
+  try {
+    content = await fs.readFile(seedFile, 'utf8');
+  } catch {
+    logger.warn(`expediteItem: ${filename} not found in inbox`);
+    return;
+  }
+  content = setFrontmatterField(content, 'status', 'expedited');
+  await fs.writeFile(seedFile, content, 'utf8');
+  logger.info(`expediteItem: ${filename} marked as expedited`);
 }
 
 // ---- Public scan ------------------------------------------------------------
@@ -116,7 +134,9 @@ async function scanInbox() {
     return;
   }
 
-  let found = 0;
+  const expeditedFiles = [];
+  const pendingFiles   = [];
+
   for (const entry of entries) {
     if (!entry.endsWith('.md')) continue;
     if (entry === 'example-research-request.md') continue;
@@ -138,17 +158,57 @@ async function scanInbox() {
       status = 'pending';
     }
 
-    if (status && status.toLowerCase() !== 'pending') continue;
+    if (!status) continue;
+    const s = status.toLowerCase();
+    if (s === 'expedited')    expeditedFiles.push(seedFile);
+    else if (s === 'pending') pendingFiles.push(seedFile);
+  }
 
-    found++;
+  // Always process expedited items regardless of gate state
+  for (const file of expeditedFiles) {
     try {
-      await processFile(seedFile);
+      await processFile(file);
+      researchGate.recordResearchCompletion();
     } catch (err) {
-      logger.error(`Failed to process ${entry}:`, err.message);
+      logger.error(`Failed to process ${path.basename(file)}:`, err.message);
     }
   }
 
-  if (found === 0) logger.info('No pending research requests');
+  // Gate check for pending items
+  const gateReason = researchGate.researchGateReason();
+
+  if (gateReason === 'quiet_hours') {
+    if (pendingFiles.length > 0) {
+      const newItems = pendingFiles.filter(f => !researchGate.isItemNotified(path.basename(f)));
+      for (const file of newItems) {
+        researchGate.markItemNotified(path.basename(file));
+        if (discordBot.isEnabled()) {
+          await discordBot.notifyQuietHoursItem(path.basename(file));
+        } else {
+          await notifier.notifyQuietHoursItemWebhook(path.basename(file));
+        }
+      }
+      logger.info(`${pendingFiles.length} pending research item(s) held — quiet hours`);
+    }
+  } else if (gateReason) {
+    if (pendingFiles.length > 0) {
+      logger.info(`${pendingFiles.length} pending research item(s) held — ${gateReason}`);
+    }
+  } else {
+    researchGate.clearNotifiedItems();
+    for (const file of pendingFiles) {
+      try {
+        await processFile(file);
+        researchGate.recordResearchCompletion();
+      } catch (err) {
+        logger.error(`Failed to process ${path.basename(file)}:`, err.message);
+      }
+    }
+  }
+
+  if (expeditedFiles.length === 0 && pendingFiles.length === 0) {
+    logger.info('No pending research requests');
+  }
 }
 
 // ---- Built-in fallback prompt (used if vault copy is missing) ---------------
@@ -173,4 +233,4 @@ SEED_PATH: {{SEED_PATH}}
 \`\`\`
 `;
 
-module.exports = { scanInbox };
+module.exports = { scanInbox, expediteItem };

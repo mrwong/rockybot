@@ -132,4 +132,17 @@ async function notifyRateLimitFallback(label) {
   ).catch(e => logger.warn(`Discord rate-limit fallback notify failed: ${e.message}`));
 }
 
-module.exports = { notify, notifyAuthExpired, notifyRateLimitHit, notifyRateLimitFallback };
+// Fires when a new inbox item is queued during quiet hours (webhook-only / non-interactive mode).
+// Interactive mode uses discordBot.notifyQuietHoursItem() instead (sends a button).
+// Never throws.
+async function notifyQuietHoursItemWebhook(filename) {
+  if (!DISCORD_WEBHOOK_URL) return;
+  const displayName = filename.replace(/\.md$/, '').replace(/-/g, ' ');
+  await sendDiscord(
+    '📥 rockybot: research item queued',
+    `*${displayName}* is waiting for quiet hours to end.\nTo run it immediately, enable interactive mode and use the Discord bot.`,
+    COLOR_WARN,
+  ).catch(e => logger.warn(`Discord quiet-hours notify failed: ${e.message}`));
+}
+
+module.exports = { notify, notifyAuthExpired, notifyRateLimitHit, notifyRateLimitFallback, notifyQuietHoursItemWebhook };
