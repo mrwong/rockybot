@@ -1,0 +1,5 @@
+can you update my configuration on homelab to support the quiet hours redeplyo
+
+---
+
+The rockybot commit 471a151 (quiet hours gate, hold toggle, expedite) was just pushed to dev and CI started. Check if the CI build completed successfully for 471a151 in /home/ubuntu/src/rockybot. If it succeeded, trigger a homelab redeploy via: cd /home/ubuntu/src/boughtmyowncloud && gh run rerun $(gh run list --limit 1 --json databaseId --jq '.[0].databaseId') — no, that reruns the last run. Actually trigger a new run with: gh workflow run gitops-sync.yml --ref main. Then confirm the run started. If CI is still in progress, schedule another wakeup.
