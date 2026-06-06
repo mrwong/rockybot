@@ -9,8 +9,9 @@ const { scanInbox, expediteItem } = require('./inbox-watcher');
 const { isHoldActive }        = require('./research-gate');
 const { scanAmendments }      = require('./amend-watcher');
 const { scanExpands }    = require('./expand-watcher');
-const { scanRevisions }  = require('./revise-watcher');
-const { scanLint }       = require('./lint-watcher');
+const { scanRevisions }      = require('./revise-watcher');
+const { scanConsolidations } = require('./consolidate-watcher');
+const { scanLint }           = require('./lint-watcher');
 
 const INBOX_POLL_MS = (parseInt(process.env.INBOX_POLL_SECONDS || '600')) * 1000;
 
@@ -19,6 +20,32 @@ const INBOX_POLL_MS = (parseInt(process.env.INBOX_POLL_SECONDS || '600')) * 1000
 // race against each other with no benefit (API budget is the bottleneck, not
 // parallelism).
 let globalRunning = false;
+
+// Poller state — exposed to the Discord bot for status display.
+let lastPollTime = null;
+let nextPollTime = null;
+let pollInterval = null;
+
+function getPollerState() {
+  return { isRunning: globalRunning, lastPollTime, nextPollTime };
+}
+
+// Cancels the current interval and fires pollAll() immediately, then resets
+// the interval so the cadence resumes from the trigger point.
+function triggerPoll() {
+  if (pollInterval) {
+    clearInterval(pollInterval);
+    pollInterval = null;
+  }
+  setImmediate(async () => {
+    await pollAll();
+    nextPollTime = Date.now() + INBOX_POLL_MS;
+    pollInterval = setInterval(async () => {
+      await pollAll();
+      nextPollTime = Date.now() + INBOX_POLL_MS;
+    }, INBOX_POLL_MS);
+  });
+}
 
 async function withGlobalLock(name, fn) {
   if (globalRunning) {
@@ -41,11 +68,13 @@ async function withGlobalLock(name, fn) {
 // compete for the global lock. Separate intervals all firing at the same
 // tick would cause inbox to always win and amend/lint/expand to always skip.
 async function pollAll() {
-  await withGlobalLock('inbox',  scanInbox);
-  await withGlobalLock('amend',  scanAmendments);
-  await withGlobalLock('expand', scanExpands);
-  await withGlobalLock('revise', scanRevisions);
-  await withGlobalLock('lint',   scanLint);
+  lastPollTime = Date.now();
+  await withGlobalLock('inbox',       scanInbox);
+  await withGlobalLock('amend',       scanAmendments);
+  await withGlobalLock('expand',      scanExpands);
+  await withGlobalLock('revise',      scanRevisions);
+  await withGlobalLock('consolidate', scanConsolidations);
+  await withGlobalLock('lint',        scanLint);
 }
 
 async function main() {
@@ -60,7 +89,10 @@ async function main() {
   discordBot.setExpediteHandler(async (filename) => {
     await expediteItem(filename);
     await pollAll();
+    nextPollTime = Date.now() + INBOX_POLL_MS;
   });
+  discordBot.setPollerStateGetter(getPollerState);
+  discordBot.setTriggerPoll(triggerPoll);
 
   await seedVault(vaultPath);
 
@@ -77,7 +109,11 @@ async function main() {
   }
 
   await pollAll();
-  setInterval(pollAll, INBOX_POLL_MS);
+  nextPollTime = Date.now() + INBOX_POLL_MS;
+  pollInterval = setInterval(async () => {
+    await pollAll();
+    nextPollTime = Date.now() + INBOX_POLL_MS;
+  }, INBOX_POLL_MS);
 }
 
 main().catch(err => {
