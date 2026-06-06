@@ -11,7 +11,7 @@ const VAULT_PATH    = process.env.VAULT_PATH || '/vault';
 const RESEARCH_PATH = path.join(VAULT_PATH, 'research');
 const SHAPE_FILE    = path.join(RESEARCH_PATH, 'wiki-shape.json');
 const BUDGET        = process.env.RELINK_BUDGET_USD || '2.00';
-const MODEL         = process.env.RELINK_MODEL || 'sonnet';
+const MODEL         = process.env.RELINK_MODEL || 'haiku';
 const TOOLS         = 'Edit,Read,Write,Glob,Grep,Bash';
 const SKIP_DIRS     = new Set(['inbox', 'processed', '.trash']);
 

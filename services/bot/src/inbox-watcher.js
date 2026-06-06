@@ -11,6 +11,7 @@ const researchGate   = require('./research-gate');
 const VAULT_PATH = process.env.VAULT_PATH || '/vault';
 const INBOX     = path.join(VAULT_PATH, 'research/inbox');
 const PROCESSED = path.join(VAULT_PATH, 'research/processed');
+const OUTBOX    = path.join(VAULT_PATH, 'research/outbox');
 const BUDGET    = process.env.RESEARCH_BUDGET_USD || '2.00';
 
 // ---- Frontmatter helpers ----------------------------------------------------
@@ -125,6 +126,7 @@ async function expediteItem(filename) {
 async function scanInbox() {
   await fs.ensureDir(INBOX);
   await fs.ensureDir(PROCESSED);
+  await fs.ensureDir(OUTBOX);
 
   let entries;
   try {
@@ -221,8 +223,9 @@ A research request has been filed. The seed note path and contents are provided 
 Vault root: {{VAULT_PATH}}
 
 Your task: read the seed note, research the topic using WebSearch and WebFetch, build
-structured cross-linked pages in research/<topic-slug>/, update research/index.md and
-research/journal.md, then set status: completed in the seed note.
+structured cross-linked pages in research/outbox/<topic-slug>/, append an entry to
+research/journal.md, then set status: completed in the seed note. The user will file
+the outbox folder into the correct PARA bucket — do not update research/index.md.
 
 See the full prompt at {{VAULT_PATH}}/research/research-prompt.md once it is seeded.
 

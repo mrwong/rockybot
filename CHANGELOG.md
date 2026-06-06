@@ -2,6 +2,16 @@
 
 All notable changes to rockybot are documented here. Version numbers follow [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`. Documentation-only changes do not increment the version.
 
+## [1.5.0] — 2026-06-06
+
+### Changed
+
+- **Research output always lands in `research/outbox/<topic-slug>/`.** Previously the inbox watcher's prompt asked Claude to file each new topic into a PARA bucket directly. In practice this meant hunting for where research ended up after commissioning it. Claude now writes every completed topic to `research/outbox/` so the user can triage and file it (drag-drop into `projects/`, `areas/`, `resources/`, or `archive/`) at their own pace. The relink watcher already covers the wikilink repair on the move out of outbox, so the journal entry, prose references, and `para:` frontmatter all converge once the topic lands in its permanent home.
+
+- **Research prompt no longer touches `research/index.md` or backlinks existing pages on first write.** Both depend on the topic's final location, which the outbox-first workflow defers to filing time. The journal entry is still written immediately (and gets its wikilink rewritten by the relink watcher when the topic moves out of outbox).
+
+- **Relink watcher defaults to `haiku` instead of `sonnet`.** Now that the relink watcher fires on every outbox → PARA move, its work is mechanical enough (prose tweaks, `[[wikilink]]` rewrites, frontmatter dates) that haiku handles it cleanly. Sonnet remains available via `RELINK_MODEL=sonnet`. Per-move cost drops from ~$0.05 to ~$0.005.
+
 ## [1.4.0] — 2026-06-06
 
 ### Added
