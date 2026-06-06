@@ -12,6 +12,7 @@ const VAULT_PATH = process.env.VAULT_PATH || '/vault';
 const INBOX     = path.join(VAULT_PATH, 'research/inbox');
 const PROCESSED = path.join(VAULT_PATH, 'research/processed');
 const BUDGET    = process.env.RESEARCH_BUDGET_USD || '2.00';
+const MODEL     = process.env.RESEARCH_MODEL || 'sonnet';
 
 // ---- Frontmatter helpers ----------------------------------------------------
 
@@ -71,11 +72,12 @@ async function processFile(seedFile) {
   const prompt = template
     .replace(/\{\{SEED_PATH\}\}/g, processingFile)
     .replace(/\{\{VAULT_PATH\}\}/g, VAULT_PATH)
+    .replace(/\{\{MODEL\}\}/g, MODEL)
     .replace('{{SEED_CONTENTS}}', seedContents);
 
   try {
     logger.info(`Invoking Claude for ${filename}`);
-    await runClaude(prompt, VAULT_PATH, { budgetUsd: BUDGET });
+    await runClaude(prompt, VAULT_PATH, { budgetUsd: BUDGET, model: MODEL });
     logger.info(`Claude completed for ${filename}`);
   } catch (err) {
     logger.error(`Claude failed for ${filename}: ${err.message}`);
