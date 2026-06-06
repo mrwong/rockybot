@@ -273,6 +273,12 @@ describe('!research text commands', () => {
     expect(msg.reply).toHaveBeenCalledWith(expect.stringContaining('not currently'));
   });
 
+  // Helper: extract text from reply arg regardless of whether it's a plain
+  // string or an object with a content field (status now sends components too).
+  function replyText(arg) {
+    return typeof arg === 'string' ? arg : (arg && arg.content) || '';
+  }
+
   it('!research status reports inactive hold and clear gate', async () => {
     const { bot, gate } = freshRequires(ENV_VALID);
     await bot.init();
@@ -283,9 +289,9 @@ describe('!research text commands', () => {
     mockClient.emit('messageCreate', msg);
     await flush();
 
-    const reply = msg.reply.mock.calls[0][0];
-    expect(reply).toMatch(/inactive/i);
-    expect(reply).toMatch(/clear/i);
+    const text = replyText(msg.reply.mock.calls[0][0]);
+    expect(text).toMatch(/inactive/i);
+    expect(text).toMatch(/clear/i);
   });
 
   it('!research status reports active hold', async () => {
@@ -298,7 +304,69 @@ describe('!research text commands', () => {
     mockClient.emit('messageCreate', msg);
     await flush();
 
-    expect(msg.reply).toHaveBeenCalledWith(expect.stringContaining('active'));
+    const text = replyText(msg.reply.mock.calls[0][0]);
+    expect(text).toMatch(/active/i);
+  });
+
+  it('!research status shows idle watcher state when pollerStateGetter returns isRunning:false', async () => {
+    const { bot, gate } = freshRequires(ENV_VALID);
+    await bot.init();
+    gate.isHoldActive.mockReturnValue(false);
+    gate.researchGateReason.mockReturnValue(null);
+    bot.setPollerStateGetter(() => ({ isRunning: false, lastPollTime: Date.now(), nextPollTime: Date.now() + 60000 }));
+
+    const msg = makeMessage('!research status');
+    mockClient.emit('messageCreate', msg);
+    await flush();
+
+    const text = replyText(msg.reply.mock.calls[0][0]);
+    expect(text).toMatch(/idle/i);
+    expect(text).toMatch(/next run/i);
+  });
+
+  it('!research status shows running watcher state when pollerStateGetter returns isRunning:true', async () => {
+    const { bot, gate } = freshRequires(ENV_VALID);
+    await bot.init();
+    gate.isHoldActive.mockReturnValue(false);
+    gate.researchGateReason.mockReturnValue(null);
+    bot.setPollerStateGetter(() => ({ isRunning: true, lastPollTime: Date.now(), nextPollTime: Date.now() + 60000 }));
+
+    const msg = makeMessage('!research status');
+    mockClient.emit('messageCreate', msg);
+    await flush();
+
+    const text = replyText(msg.reply.mock.calls[0][0]);
+    expect(text).toMatch(/running/i);
+  });
+
+  it('!research status includes a Run now button when client is active', async () => {
+    const { bot, gate } = freshRequires(ENV_VALID);
+    await bot.init();
+    gate.isHoldActive.mockReturnValue(false);
+    gate.researchGateReason.mockReturnValue(null);
+
+    const msg = makeMessage('!research status');
+    mockClient.emit('messageCreate', msg);
+    await flush();
+
+    const arg = msg.reply.mock.calls[0][0];
+    // When client is active, reply is called with an object containing components
+    expect(arg).toHaveProperty('components');
+  });
+
+  it('!research help replies with all command names', async () => {
+    const { bot } = freshRequires(ENV_VALID);
+    await bot.init();
+
+    const msg = makeMessage('!research help');
+    mockClient.emit('messageCreate', msg);
+    await flush();
+
+    const text = replyText(msg.reply.mock.calls[0][0]);
+    expect(text).toMatch(/help/i);
+    expect(text).toMatch(/status/i);
+    expect(text).toMatch(/hold/i);
+    expect(text).toMatch(/release/i);
   });
 
   it('ignores messages from other channels', async () => {
@@ -321,5 +389,66 @@ describe('!research text commands', () => {
     await flush();
 
     expect(gate.setHold).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// research_run_now button interaction
+// ---------------------------------------------------------------------------
+
+describe('research_run_now button', () => {
+  function makeButtonInteraction(customId) {
+    return {
+      isButton:    () => true,
+      customId,
+      deferUpdate: jest.fn().mockResolvedValue({}),
+      editReply:   jest.fn().mockResolvedValue({}),
+      reply:       jest.fn().mockResolvedValue({}),
+      update:      jest.fn().mockResolvedValue({}),
+    };
+  }
+
+  const flush = () => new Promise(resolve => setImmediate(resolve));
+
+  it('calls triggerPollFn when Run now button is clicked', async () => {
+    const { bot } = freshRequires(ENV_VALID);
+    await bot.init();
+
+    const trigger = jest.fn();
+    bot.setTriggerPoll(trigger);
+
+    const interaction = makeButtonInteraction('research_run_now');
+    mockClient.emit('interactionCreate', interaction);
+    await flush();
+
+    expect(trigger).toHaveBeenCalledTimes(1);
+  });
+
+  it('responds with confirmation message after triggering poll', async () => {
+    const { bot } = freshRequires(ENV_VALID);
+    await bot.init();
+    bot.setTriggerPoll(jest.fn());
+
+    const interaction = makeButtonInteraction('research_run_now');
+    mockClient.emit('interactionCreate', interaction);
+    await flush();
+
+    expect(interaction.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringMatching(/triggered/i) })
+    );
+  });
+
+  it('responds with warning when triggerPollFn is not registered', async () => {
+    const { bot } = freshRequires(ENV_VALID);
+    await bot.init();
+    // Do NOT call setTriggerPoll — triggerPollFn stays null
+
+    const interaction = makeButtonInteraction('research_run_now');
+    mockClient.emit('interactionCreate', interaction);
+    await flush();
+
+    expect(interaction.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringMatching(/not available/i) })
+    );
   });
 });

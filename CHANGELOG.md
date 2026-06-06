@@ -2,6 +2,19 @@
 
 All notable changes to rockybot are documented here. Version numbers follow [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`. Documentation-only changes do not increment the version.
 
+## [1.3.0] — 2026-06-06
+
+### Added
+
+- **`[!consolidate]` watcher.** Place a `> [!consolidate]` callout in any research topic's `index.md` to merge one or more source topics into that target topic. The watcher reads the instruction text from the callout, merges source content into the target, updates all wikilinks across the vault pointing to the source, moves the source folder to `research/archive/`, and removes the callout when done. Configurable via `CONSOLIDATE_BUDGET_USD` (default `$4.00`) and `CONSOLIDATE_MODEL` (default `sonnet`). The prompt template lives in `research/consolidate-prompt.md` in the vault — edit it in Obsidian to change merge behavior without redeploying.
+
+- **`!research help` command.** New Discord text command that lists all available `!research` commands with one-line descriptions. Requires `DISCORD_INTERACTIVE_AUTH=true` and Message Content Intent.
+
+- **Enhanced `!research status`.** The status command now shows three additional lines alongside hold/gate state:
+  - **Watcher busy indicator** — `🔄 Watcher: running` when a Claude invocation is in progress, `⚙️ Watcher: idle` otherwise.
+  - **Next run countdown** — `⏱ Next run: in Xm Ys` showing time until the next scheduled poll.
+  - **▶️ Run now button** — interactive button that cancels the current interval and fires a poll immediately, then resets the interval from that point. Useful for testing a new research request without waiting for the next scheduled tick.
+
 ## [1.2.0] — 2026-05-02
 
 ### Added

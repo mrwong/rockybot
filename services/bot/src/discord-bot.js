@@ -17,7 +17,9 @@ const RATE_LIMIT_TIMEOUT_MS  = 24 * 60 * 60 * 1000;
 
 let client  = null;
 let pendingDecision = null;  // { resolve, timeoutId, messageRef }
-let expediteHandler = null;  // registered by index.js via setExpediteHandler
+let expediteHandler    = null;  // registered by index.js via setExpediteHandler
+let pollerStateGetter  = null;  // registered by index.js via setPollerStateGetter
+let triggerPollFn      = null;  // registered by index.js via setTriggerPoll
 
 function isEnabled() {
   return INTERACTIVE_AUTH && !!client;
@@ -25,9 +27,9 @@ function isEnabled() {
 
 // Registers the callback invoked when the user clicks an Expedite button.
 // Wired in index.js to avoid a circular dependency between discord-bot and inbox-watcher.
-function setExpediteHandler(fn) {
-  expediteHandler = fn;
-}
+function setExpediteHandler(fn)   { expediteHandler   = fn; }
+function setPollerStateGetter(fn) { pollerStateGetter = fn; }
+function setTriggerPoll(fn)       { triggerPollFn     = fn; }
 
 // Call once at startup when DISCORD_INTERACTIVE_AUTH=true.
 // Returns a promise that resolves once the bot is ready (or rejects on bad token).
@@ -65,6 +67,18 @@ async function init() {
         }
       } else {
         await interaction.editReply({ content: '⚠️ Expedite handler not registered.', components: [] }).catch(() => {});
+      }
+      return;
+    }
+
+    // ---- Run now (advance next poll to immediately) -------------------------
+    if (interaction.customId === 'research_run_now') {
+      await interaction.deferUpdate().catch(() => {});
+      if (triggerPollFn) {
+        triggerPollFn();
+        await interaction.editReply({ content: '▶️ Poll triggered — running now.', components: [] }).catch(() => {});
+      } else {
+        await interaction.editReply({ content: '⚠️ Trigger not available.', components: [] }).catch(() => {});
       }
       return;
     }
@@ -112,7 +126,8 @@ async function init() {
     if (message.author.bot) return;
     if (message.channelId !== CHANNEL_ID) return;
     const text = message.content.trim().toLowerCase();
-    if      (text === '!research hold')    await handleHoldCommand(message, true);
+    if      (text === '!research help')    await handleHelpCommand(message);
+    else if (text === '!research hold')    await handleHoldCommand(message, true);
     else if (text === '!research release') await handleHoldCommand(message, false);
     else if (text === '!research status')  await handleStatusCommand(message);
   });
@@ -126,6 +141,17 @@ async function init() {
   });
 
   logger.info('discord-bot: ready');
+}
+
+async function handleHelpCommand(message) {
+  const lines = [
+    '**rockybot — `!research` commands**',
+    '`!research help` — show this help',
+    '`!research status` — watcher busy state, gate status, time until next run (+ Run now button)',
+    '`!research hold` — pause all inbox research processing',
+    '`!research release` — resume inbox research processing',
+  ];
+  await message.reply(lines.join('\n')).catch(() => {});
 }
 
 async function handleHoldCommand(message, activate) {
@@ -157,7 +183,38 @@ async function handleStatusCommand(message) {
   const gateReason = researchGate.researchGateReason();
   const holdLine   = holdActive ? '🔴 Hold: **active**' : '🟢 Hold: inactive';
   const gateLine   = gateReason ? `Gate: \`${gateReason}\`` : 'Gate: clear';
-  await message.reply(`${holdLine}\n${gateLine}`).catch(() => {});
+
+  const state = pollerStateGetter ? pollerStateGetter() : null;
+  const busyLine = state
+    ? (state.isRunning ? '🔄 Watcher: **running**' : '⚙️ Watcher: idle')
+    : '';
+  const nextLine = (state && state.nextPollTime)
+    ? `⏱ Next run: in ${formatCountdown(state.nextPollTime - Date.now())}`
+    : '';
+
+  const lines = [holdLine, gateLine, busyLine, nextLine].filter(Boolean);
+
+  // Add "Run now" button only when interactive mode is active
+  if (client) {
+    const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('research_run_now')
+        .setLabel('▶️ Run now')
+        .setStyle(ButtonStyle.Primary),
+    );
+    await message.reply({ content: lines.join('\n'), components: [row] }).catch(() => {});
+  } else {
+    await message.reply(lines.join('\n')).catch(() => {});
+  }
+}
+
+function formatCountdown(ms) {
+  if (ms <= 0) return 'now';
+  const totalSec = Math.ceil(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
 // Posts an auth decision message to DISCORD_CHANNEL_ID and waits for the user
@@ -314,4 +371,4 @@ async function broadcastStartup(version) {
   }
 }
 
-module.exports = { init, isEnabled, setExpediteHandler, askAuthDecision, askRateLimitDecision, notifyQuietHoursItem, broadcastStartup };
+module.exports = { init, isEnabled, setExpediteHandler, setPollerStateGetter, setTriggerPoll, askAuthDecision, askRateLimitDecision, notifyQuietHoursItem, broadcastStartup };
