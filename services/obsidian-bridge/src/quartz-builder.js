@@ -21,16 +21,27 @@ function scheduleRebuild(vaultPath, quartzOutput) {
 function getPublishedTopics(vaultPath) {
   const researchDir = path.join(vaultPath, 'research');
   if (!fs.existsSync(researchDir)) return [];
-  const entries = fs.readdirSync(researchDir, { withFileTypes: true });
   const published = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const indexPath = path.join(researchDir, entry.name, 'index.md');
-    if (!fs.existsSync(indexPath)) continue;
-    const content = fs.readFileSync(indexPath, 'utf8');
-    const match = content.match(/^publish:\s*(true|false)/m);
-    if (match && match[1] === 'true') published.push(entry.name);
+  const SKIP_DIRS = new Set(['inbox', 'processed', '.trash']);
+
+  // Scan up to two levels deep: research/topic/ and research/bucket/topic/
+  function scanDir(dir, relPrefix) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory() || SKIP_DIRS.has(entry.name)) continue;
+      const relPath = relPrefix ? `${relPrefix}/${entry.name}` : entry.name;
+      const indexPath = path.join(dir, entry.name, 'index.md');
+      if (fs.existsSync(indexPath)) {
+        const content = fs.readFileSync(indexPath, 'utf8');
+        const match = content.match(/^publish:\s*(true|false)/m);
+        if (match && match[1] === 'true') published.push(relPath);
+      }
+      // Recurse one level to support research/bucket/topic/ structure
+      if (!relPrefix) scanDir(path.join(dir, entry.name), relPath);
+    }
   }
+
+  scanDir(researchDir, '');
   return published;
 }
 
@@ -43,7 +54,17 @@ function runBuild(vaultPath, quartzOutput) {
     }
     logger.info(`Publishing ${topics.length} topic(s): ${topics.join(', ')}`);
 
-    const includes = topics.map(t => `--include='/${t}/***'`).join(' ');
+    // For nested paths like projects/china-vacation-2026, rsync needs an explicit
+    // include for the parent dir before it can traverse into topic subdirs.
+    const parentDirs = new Set();
+    const topicIncludes = [];
+    for (const t of topics) {
+      const parts = t.split('/');
+      if (parts.length > 1) parentDirs.add(parts[0]);
+      topicIncludes.push(`--include='/${t}/***'`);
+    }
+    const parentIncludes = [...parentDirs].map(d => `--include='/${d}/'`);
+    const includes = [...parentIncludes, ...topicIncludes].join(' ');
     logger.info('Syncing published topics → quartz content dir');
     execSync(
       `rsync -a --delete ${includes} --exclude='*' ${vaultPath}/research/ ${QUARTZ_SRC}/content/`,
@@ -52,8 +73,8 @@ function runBuild(vaultPath, quartzOutput) {
 
     // Generate a root index so Quartz produces index.html at the site root
     const topicLinks = topics.map(t => {
-      const label = t.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      return `- [[${t}/index|${label}]]  ·  [⬇ Export ZIP](/export/${t})`;
+      const displayName = t.split('/').pop().replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      return `- [[${t}/index|${displayName}]]  ·  [⬇ Export ZIP](/export/${t})`;
     }).join('\n');
     fs.outputFileSync(
       path.join(QUARTZ_SRC, 'content', 'index.md'),
