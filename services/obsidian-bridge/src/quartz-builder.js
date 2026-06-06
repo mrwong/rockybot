@@ -24,7 +24,6 @@ function getPublishedTopics(vaultPath) {
   const published = [];
   const SKIP_DIRS = new Set(['inbox', 'processed', '.trash']);
 
-  // Scan up to two levels deep: research/topic/ and research/bucket/topic/
   function scanDir(dir, relPrefix) {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
@@ -36,8 +35,7 @@ function getPublishedTopics(vaultPath) {
         const match = content.match(/^publish:\s*(true|false)/m);
         if (match && match[1] === 'true') published.push(relPath);
       }
-      // Recurse one level to support research/bucket/topic/ structure
-      if (!relPrefix) scanDir(path.join(dir, entry.name), relPath);
+      scanDir(path.join(dir, entry.name), relPath);
     }
   }
 
@@ -54,17 +52,22 @@ function runBuild(vaultPath, quartzOutput) {
     }
     logger.info(`Publishing ${topics.length} topic(s): ${topics.join(', ')}`);
 
-    // For nested paths like projects/china-vacation-2026, rsync needs an explicit
-    // include for the parent dir before it can traverse into topic subdirs.
-    const parentDirs = new Set();
+    // rsync needs an explicit --include for every path segment before it can
+    // traverse into subdirs. For projects/travel/china-vacation-2026 that means
+    // include /projects/, /projects/travel/, then /projects/travel/china-vacation-2026/***
+    const ancestorIncludes = new Set();
     const topicIncludes = [];
     for (const t of topics) {
       const parts = t.split('/');
-      if (parts.length > 1) parentDirs.add(parts[0]);
+      for (let i = 1; i < parts.length; i++) {
+        ancestorIncludes.add(`/${parts.slice(0, i).join('/')}/`);
+      }
       topicIncludes.push(`--include='/${t}/***'`);
     }
-    const parentIncludes = [...parentDirs].map(d => `--include='/${d}/'`);
-    const includes = [...parentIncludes, ...topicIncludes].join(' ');
+    const includes = [
+      ...[...ancestorIncludes].map(p => `--include='${p}'`),
+      ...topicIncludes,
+    ].join(' ');
     logger.info('Syncing published topics → quartz content dir');
     execSync(
       `rsync -a --delete ${includes} --exclude='*' ${vaultPath}/research/ ${QUARTZ_SRC}/content/`,

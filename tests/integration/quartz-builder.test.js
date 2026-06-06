@@ -138,12 +138,19 @@ describe('getPublishedTopics', () => {
     expect(result).toEqual(['projects/real-topic']);
   });
 
-  it('does not recurse more than two levels deep', () => {
-    // Three levels deep — should not be found
+  it('recurses into arbitrarily deep directories', () => {
+    // Three levels deep — projects/active/subtopic — should be found
     const deepDir = path.join(tmpDir, 'research', 'projects', 'active', 'subtopic');
     fs.mkdirpSync(deepDir);
     fs.writeFileSync(path.join(deepDir, 'index.md'), '---\npublish: true\n---\n');
-    expect(getPublishedTopics(tmpDir)).toEqual([]);
+    expect(getPublishedTopics(tmpDir)).toContain('projects/active/subtopic');
+  });
+
+  it('finds topics at four levels of nesting', () => {
+    const deepDir = path.join(tmpDir, 'research', 'areas', 'health', 'vision', 'lasik-research');
+    fs.mkdirpSync(deepDir);
+    fs.writeFileSync(path.join(deepDir, 'index.md'), '---\npublish: true\n---\n');
+    expect(getPublishedTopics(tmpDir)).toContain('areas/health/vision/lasik-research');
   });
 
   it('bucket dir itself is not returned even if it has an index.md with publish: true', () => {

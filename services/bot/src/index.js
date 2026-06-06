@@ -12,6 +12,7 @@ const { scanExpands }    = require('./expand-watcher');
 const { scanRevisions }      = require('./revise-watcher');
 const { scanConsolidations } = require('./consolidate-watcher');
 const { scanLint }           = require('./lint-watcher');
+const { scanRelinks }        = require('./relink-watcher');
 
 const INBOX_POLL_MS = (parseInt(process.env.INBOX_POLL_SECONDS || '600')) * 1000;
 
@@ -75,6 +76,7 @@ async function pollAll() {
   await withGlobalLock('revise',      scanRevisions);
   await withGlobalLock('consolidate', scanConsolidations);
   await withGlobalLock('lint',        scanLint);
+  await withGlobalLock('relink',      scanRelinks);
 }
 
 async function main() {

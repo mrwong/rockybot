@@ -2,6 +2,12 @@
 
 All notable changes to rockybot are documented here. Version numbers follow [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`. Documentation-only changes do not increment the version.
 
+## [1.4.0] — 2026-06-06
+
+### Added
+
+- **Relink watcher.** Automatically detects when topic folders have been moved in Obsidian and repairs what Obsidian's link resolver cannot: prose references to old location names and stale `para:`/`updated:` frontmatter fields. Runs on every poll cycle with zero Claude cost when nothing has moved — the watcher computes a diff between a stored shape manifest (`research/wiki-shape.json`) and the current vault structure using pure JS. Claude is invoked only when moves are detected, and only reads the files that actually reference the moved topics, keeping per-session cost to $0.01–$0.10. After Claude runs, the manifest is updated so the next poll starts fresh. Configurable via `RELINK_BUDGET_USD` (default `$2.00`) and `RELINK_MODEL` (default `sonnet`). The prompt template lives in `research/relink-prompt.md` in the vault — edit it in Obsidian to change repair behavior without redeploying.
+
 ## [1.3.0] — 2026-06-06
 
 ### Added
