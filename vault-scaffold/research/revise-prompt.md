@@ -1,14 +1,15 @@
 ---
 tags: [system, research, prompt]
 created: 2026-04-21
-description: "Prompt template for [!revise] callout tasks. Edit here to change how Claude revises an entire research section."
+description: "Prompt template for [!revise] callout tasks. Synced from rockybot scaffold on bot restart — see info callout for edit policy."
 ---
 
 # Revise Prompt
 
-This is the prompt template the research revise watcher sends to Claude when it finds a `> [!revise]` callout in a research file. Unlike `[!expand]` (which creates new pages) or `[!claude]` (targeted inline edits), `[!revise]` triggers a corpus-level review and revision of an entire section based on new context.
+> [!info] How edits to this file behave
+> This file is replaced on bot restart from `vault-scaffold/research/revise-prompt.md` in the rockybot repo. Edits made here in Obsidian take effect on the next watcher run but will be overwritten on the next bot restart — your previous version is saved to `research/.prompts-backup/revise-prompt-<timestamp>.md` so nothing is lost. To make changes permanent, edit the scaffold in the rockybot repo and ship a new bot version.
 
-Edit this file in Obsidian to change how revise tasks are handled — the watcher reads it live from the vault on each run.
+The revise watcher sends this prompt to Claude when it finds a `> [!revise]` callout in a research file. Unlike `[!expand]` (which creates new pages) or `[!claude]` (targeted inline edits), `[!revise]` triggers a corpus-level review and revision of an entire section based on new context.
 
 The token `{{FILE_PATH}}` is substituted with the source file's absolute path. `{{VAULT_PATH}}` is the vault root.
 

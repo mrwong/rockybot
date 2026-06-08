@@ -1,12 +1,15 @@
 ---
 tags: [system, research, prompt]
 created: 2026-04-17
-description: "Prompt template for [!claude] inline amendment tasks. Edit here to change how Claude handles callout tasks."
+description: "Prompt template for [!claude] inline amendment tasks. Synced from rockybot scaffold on bot restart — see info callout for edit policy."
 ---
 
 # Amend Prompt
 
-This is the prompt template the research amend watcher sends to Claude when it finds a `> [!claude]` callout in a research file. Edit this file in Obsidian to change how amendments are handled — the watcher reads it live from the vault on each run.
+> [!info] How edits to this file behave
+> This file is replaced on bot restart from `vault-scaffold/research/amend-prompt.md` in the rockybot repo. Edits made here in Obsidian take effect on the next watcher run but will be overwritten on the next bot restart — your previous version is saved to `research/.prompts-backup/amend-prompt-<timestamp>.md` so nothing is lost. To make changes permanent, edit the scaffold in the rockybot repo and ship a new bot version.
+
+The amend watcher sends this prompt to Claude when it finds a `> [!claude]` callout in a research file.
 
 The token `{{FILE_PATH}}` is substituted with the target file's absolute path before the prompt is sent.
 

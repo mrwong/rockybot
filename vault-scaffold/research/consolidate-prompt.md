@@ -1,14 +1,15 @@
 ---
 tags: [system, research, prompt]
 created: 2026-06-06
-description: "Prompt template for [!consolidate] callout tasks. Edit here to change how Claude merges research topics."
+description: "Prompt template for [!consolidate] callout tasks. Synced from rockybot scaffold on bot restart — see info callout for edit policy."
 ---
 
 # Consolidate Prompt
 
-This is the prompt template the research consolidate watcher sends to Claude when it finds a `> [!consolidate]` callout in a research file. Use this callout to merge two or more topic folders into one — for example, folding a one-off research topic into a larger project, or combining thin overlapping topics.
+> [!info] How edits to this file behave
+> This file is replaced on bot restart from `vault-scaffold/research/consolidate-prompt.md` in the rockybot repo. Edits made here in Obsidian take effect on the next watcher run but will be overwritten on the next bot restart — your previous version is saved to `research/.prompts-backup/consolidate-prompt-<timestamp>.md` so nothing is lost. To make changes permanent, edit the scaffold in the rockybot repo and ship a new bot version.
 
-Edit this file in Obsidian to change how consolidation tasks are handled — the watcher reads it live from the vault on each run.
+The consolidate watcher sends this prompt to Claude when it finds a `> [!consolidate]` callout in a research file. Use this callout to merge two or more topic folders into one — for example, folding a one-off research topic into a larger project, or combining thin overlapping topics.
 
 The token `{{FILE_PATH}}` is substituted with the **target** file's absolute path (the file that contains the callout — this is the topic you are merging **into**). `{{VAULT_PATH}}` is the vault root.
 
