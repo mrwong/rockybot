@@ -19,16 +19,32 @@ async function walkDir(dirPath, baseRel, callback) {
   }
 }
 
-// Converts a within-topic href (relative ../topicSlug/X or absolute /topicSlug/X)
-// to a same-directory relative .html path (files are at ZIP root).
+// Converts a within-topic href to a same-directory relative .html path (files are at
+// ZIP root). Handles:
+//  - absolute: /topicSlug/X
+//  - relative: (../)+topicSlug/X  — Quartz emits one ../ per ancestor of the page, so
+//    a nested topic like "projects/foo" produces "../../projects/foo/sub" from foo/index.
 function rewriteTopicLink(href, topicSlug) {
   const absPrefix = `/${topicSlug}`;
-  const relPrefix = `../${topicSlug}`;
-
   let rest;
-  if (href.startsWith(relPrefix)) rest = href.slice(relPrefix.length);
-  else if (href.startsWith(absPrefix)) rest = href.slice(absPrefix.length);
-  else return null;
+
+  const upMatch = href.match(/^(?:\.\.\/)+/);
+  if (upMatch) {
+    const afterUp = href.slice(upMatch[0].length);
+    if (afterUp === topicSlug ||
+        afterUp.startsWith(`${topicSlug}/`) ||
+        afterUp.startsWith(`${topicSlug}#`)) {
+      rest = afterUp.slice(topicSlug.length);
+    } else {
+      return null;
+    }
+  } else if (href === absPrefix ||
+             href.startsWith(`${absPrefix}/`) ||
+             href.startsWith(`${absPrefix}#`)) {
+    rest = href.slice(absPrefix.length);
+  } else {
+    return null;
+  }
 
   let fragment = '';
   const hashIdx = rest.indexOf('#');
@@ -40,10 +56,11 @@ function rewriteTopicLink(href, topicSlug) {
   return `./${rest}${fragment}`;
 }
 
-// Strips the leading ../ that Quartz generates for paths relative to a topic subdir.
-// In the ZIP, those root-level resources (index.css, static/) sit alongside the HTML files.
+// Strips ALL leading ../ segments Quartz generates for root-level resources
+// (index.css, static/). For a depth-2 topic like projects/foo, Quartz emits
+// ../../index.css; in the flat ZIP these resources sit alongside the HTML files.
 function stripParent(href) {
-  return href.startsWith('../') ? href.slice(3) : href;
+  return href.replace(/^(?:\.\.\/)+/, '');
 }
 
 function rewriteHtml(html, topicSlug) {
@@ -74,9 +91,6 @@ function rewriteHtml(html, topicSlug) {
   });
 
   // Rewrite anchor hrefs
-  const absPrefix = `/${topicSlug}`;
-  const relPrefix = `../${topicSlug}`;
-
   $('a[href]').each((_, el) => {
     const href = $(el).attr('href');
     if (!href) return;
@@ -84,11 +98,10 @@ function rewriteHtml(html, topicSlug) {
     if (href.startsWith('http://') || href.startsWith('https://') ||
         href.startsWith('#') || href.startsWith('mailto:')) return;
 
-    // Within-topic: ../topicSlug/... or /topicSlug/...
-    if (href === relPrefix || href.startsWith(`${relPrefix}/`) || href.startsWith(`${relPrefix}#`) ||
-        href === absPrefix || href.startsWith(`${absPrefix}/`) || href.startsWith(`${absPrefix}#`)) {
-      const local = rewriteTopicLink(href, topicSlug);
-      if (local) $(el).attr('href', local);
+    // Within-topic? rewriteTopicLink returns null if not.
+    const local = rewriteTopicLink(href, topicSlug);
+    if (local !== null) {
+      $(el).attr('href', local);
       return;
     }
 
@@ -112,7 +125,9 @@ function buildTopicExport(quartzOutput, topicSlug, res) {
     res.on('error', reject);
 
     res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${topicSlug}-export.zip"`);
+    // Flatten nested slug (projects/foo → projects-foo) for the download filename
+    const safeName = topicSlug.replace(/\//g, '-');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}-export.zip"`);
     archive.pipe(res);
 
     (async () => {

@@ -2,6 +2,20 @@
 
 All notable changes to rockybot are documented here. Version numbers follow [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`. Documentation-only changes do not increment the version.
 
+## [1.7.0] — 2026-06-09
+
+### Fixed
+
+- **Topic export ZIP returned 404 for nested PARA topics.** After the vault was reorganized into PARA buckets (`research/projects/`, `research/areas/`, etc.), the export server's slug gate rejected slugs containing slashes — both the URL match `/^\/export\/([^/?#]+)$/` and the format check `/^[a-z0-9-]+$/` allowed only flat slugs. The URL match now accepts the rest of the path after `/export/`, and the format check allows `/`-separated segments (each still constrained to `[a-z0-9-]+`), so `/export/projects/penang-trip` and `/export/resources/hobbies/boardgames/heavy-2026` now resolve correctly. Path traversal is still blocked: `..` is rejected by the segment regex, empty segments (trailing or duplicate `/`) are rejected, and the existing publish-whitelist gate continues to enforce that only `publish: true` topics can be exported.
+
+- **Export ZIP HTML rewriting now handles nested-topic depth.** For a topic at `projects/penang-trip/`, Quartz emits `../../index.css` and `../../projects/penang-trip/sub-page` (one `..` per ancestor of the page). The export builder previously stripped only a single `../` from resource paths and only matched one-level-up within-topic links. Both now strip/match an arbitrary number of leading `../` segments, so resource paths (`index.css`, `static/`) and within-topic anchors render correctly at any nesting depth. Cross-topic links from nested topics continue to neuter cleanly — there is no false within-topic match against sibling topics that share a prefix.
+
+- **Content-Disposition filename flattens slashes.** Nested slug `projects/penang-trip` produced an invalid filename `projects/penang-trip-export.zip` containing a directory separator; it is now flattened to `projects-penang-trip-export.zip`.
+
+### Changed
+
+- **Notes-web root index now mirrors the PARA directory shape.** Previously every published topic rendered as a single flat bullet list, which made deeply nested topics hard to find. The root `index.md` generator (in obsidian-bridge's quartz-builder) now builds a tree from the topic slugs: top-level slugs render as bullets at the top of the page, each PARA bucket (`projects/`, `areas/`, `resources/`, `archive/`) gets an `## H2` section, and sub-folders render as indented `**name/**` group bullets with their topics nested underneath. Within each tier, leaf topics come before sub-folder groups, and entries are sorted alphabetically. Every leaf still carries both a wikilink to the topic and an `⬇ Export ZIP` link.
+
 ## [1.6.0] — 2026-06-08
 
 ### Changed

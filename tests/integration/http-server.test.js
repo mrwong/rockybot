@@ -64,8 +64,20 @@ beforeAll(() => new Promise((resolve) => {
   fs.mkdirpSync(draftDir);
   fs.writeFileSync(path.join(draftDir, 'index.md'), '---\npublish: false\n---\n');
 
-  // Quartz output exists for valid-topic (but not draft-topic)
+  // Nested published topic (PARA bucket layout)
+  const nestedPubDir = path.join(vaultPath, 'research', 'projects', 'penang-trip');
+  fs.mkdirpSync(nestedPubDir);
+  fs.writeFileSync(path.join(nestedPubDir, 'index.md'), '---\npublish: true\n---\n');
+
+  // Deep-nested published topic
+  const deepPubDir = path.join(vaultPath, 'research', 'resources', 'hobbies', 'boardgames', 'heavy-2026');
+  fs.mkdirpSync(deepPubDir);
+  fs.writeFileSync(path.join(deepPubDir, 'index.md'), '---\npublish: true\n---\n');
+
+  // Quartz output exists for valid-topic and the two nested topics (but not draft-topic)
   fs.mkdirpSync(path.join(quartzOutput, 'valid-topic'));
+  fs.mkdirpSync(path.join(quartzOutput, 'projects', 'penang-trip'));
+  fs.mkdirpSync(path.join(quartzOutput, 'resources', 'hobbies', 'boardgames', 'heavy-2026'));
 
   server = createExportServer(0, quartzOutput, vaultPath); // port 0 = random
   server.on('listening', resolve);
@@ -139,6 +151,48 @@ describe('http-server: slug format gate', () => {
 
   it('rejects slug with underscore → 404', async () => {
     const res = await request(server, 'GET', '/export/my_topic');
+    expect(res.status).toBe(404);
+    expect(buildTopicExport).not.toHaveBeenCalled();
+  });
+
+  it('rejects empty segment (trailing slash): /export/projects/ → 404', async () => {
+    const res = await request(server, 'GET', '/export/projects/');
+    expect(res.status).toBe(404);
+    expect(buildTopicExport).not.toHaveBeenCalled();
+  });
+
+  it('rejects empty segment (double slash): /export/projects//foo → 404', async () => {
+    const res = await request(server, 'GET', '/export/projects//foo');
+    expect(res.status).toBe(404);
+    expect(buildTopicExport).not.toHaveBeenCalled();
+  });
+
+  it('rejects traversal hidden in nested slug: /export/projects/../passwd → 404', async () => {
+    const res = await request(server, 'GET', '/export/projects/../passwd');
+    expect(res.status).toBe(404);
+    expect(buildTopicExport).not.toHaveBeenCalled();
+  });
+});
+
+describe('http-server: nested PARA slugs', () => {
+  it('GET /export/projects/penang-trip → 200 and calls buildTopicExport with nested slug', async () => {
+    const res = await request(server, 'GET', '/export/projects/penang-trip');
+    expect(res.status).toBe(200);
+    expect(buildTopicExport).toHaveBeenCalledWith(
+      quartzOutput, 'projects/penang-trip', expect.anything()
+    );
+  });
+
+  it('GET /export/resources/hobbies/boardgames/heavy-2026 → 200 (4-level nesting)', async () => {
+    const res = await request(server, 'GET', '/export/resources/hobbies/boardgames/heavy-2026');
+    expect(res.status).toBe(200);
+    expect(buildTopicExport).toHaveBeenCalledWith(
+      quartzOutput, 'resources/hobbies/boardgames/heavy-2026', expect.anything()
+    );
+  });
+
+  it('rejects nested slug that is not in the publish whitelist → 404', async () => {
+    const res = await request(server, 'GET', '/export/projects/unknown-topic');
     expect(res.status).toBe(404);
     expect(buildTopicExport).not.toHaveBeenCalled();
   });
