@@ -4,6 +4,10 @@ All notable changes to rockybot are documented here. Version numbers follow [Sem
 
 ## [1.7.0] — 2026-06-09
 
+### Added
+
+- **Multi-topic export bundles.** The notes-web root index now has an **⬇ Export multiple topics as a ZIP** selector (a checkbox per published topic plus an *Export selected* button) alongside the existing per-topic quick links. Selecting several subject areas downloads them as a single ZIP via `GET /export?slugs=a,b,projects/c`. Unlike the single-topic export (which flattens one topic to the ZIP root and neuters every cross-topic link), the multi-topic bundle **preserves Quartz's directory layout** (`<slug>/…` with a shared root `index.css` + `static/` and a generated landing `index.html`), so a cross-topic link **resolves locally when its target topic is also in the selection** and is neutered otherwise. Nested PARA slugs are supported and link depth is computed correctly. All single-topic security gates apply per slug (format, publish-whitelist, build-existence), all-or-nothing; the request is capped at 25 topics and concurrency-guarded on the selection. New modules: `services/obsidian-bridge/src/export-ui.js` (root-index widget injection) and `buildMultiExport`/`rewriteHtmlMulti` in `export-builder.js`; nginx now proxies the bare `/export` path in addition to `/export/<slug>`.
+
 ### Fixed
 
 - **Topic export ZIP returned 404 for nested PARA topics.** After the vault was reorganized into PARA buckets (`research/projects/`, `research/areas/`, etc.), the export server's slug gate rejected slugs containing slashes — both the URL match `/^\/export\/([^/?#]+)$/` and the format check `/^[a-z0-9-]+$/` allowed only flat slugs. The URL match now accepts the rest of the path after `/export/`, and the format check allows `/`-separated segments (each still constrained to `[a-z0-9-]+`), so `/export/projects/penang-trip` and `/export/resources/hobbies/boardgames/heavy-2026` now resolve correctly. Path traversal is still blocked: `..` is rejected by the segment regex, empty segments (trailing or duplicate `/`) are rejected, and the existing publish-whitelist gate continues to enforce that only `publish: true` topics can be exported.

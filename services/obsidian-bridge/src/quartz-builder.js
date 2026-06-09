@@ -4,6 +4,7 @@ const { execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs-extra');
 const logger = require('./logger');
+const { injectExportUI } = require('./export-ui');
 
 const QUARTZ_SRC = '/quartz-src';
 const DEBOUNCE_MS = 3000;
@@ -90,6 +91,9 @@ function runBuild(vaultPath, quartzOutput) {
     // NFS ACLs strip world-readable bits; restore them so nginx can serve the files
     execSync(`chmod -R o+r ${quartzOutput}`, { stdio: 'inherit' });
     execSync(`find ${quartzOutput} -type d -exec chmod o+x {} +`, { stdio: 'inherit' });
+
+    // Inject the multi-topic export selector into the built root index.
+    injectExportUI(quartzOutput, topics);
 
     fs.outputFileSync(path.join(quartzOutput, '.last-built'), new Date().toISOString());
     logger.info('Quartz build complete');
