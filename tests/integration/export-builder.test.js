@@ -153,3 +153,181 @@ describe('buildTopicExport ZIP structure', () => {
     expect(content).toContain('href="./index.html"');
   });
 });
+
+// ---------------------------------------------------------------------------
+// rewriteHtml — nested PARA topic slugs (e.g. projects/penang-trip)
+// ---------------------------------------------------------------------------
+
+describe('rewriteHtml — nested PARA slugs', () => {
+  const NESTED = 'projects/penang-trip';
+
+  it('strips multi-level ../ from root resource: ../../index.css → index.css', () => {
+    const html = `<html><head><link href="../../index.css" rel="stylesheet"></head><body></body></html>`;
+    const $ = cheerio.load(rewriteHtml(html, NESTED), { decodeEntities: false });
+    expect($('link[rel="stylesheet"]').attr('href')).toBe('index.css');
+  });
+
+  it('strips multi-level ../ from static asset: ../../static/icon.png → static/icon.png', () => {
+    const html = `<html><body><img src="../../static/icon.png"></body></html>`;
+    const $ = cheerio.load(rewriteHtml(html, NESTED), { decodeEntities: false });
+    expect($('img').attr('src')).toBe('static/icon.png');
+  });
+
+  it('within-topic relative link with matching depth: ../../projects/penang-trip/sub → ./sub.html', () => {
+    const html = `<html><body><a href="../../projects/penang-trip/sub-page">sub</a></body></html>`;
+    const $ = cheerio.load(rewriteHtml(html, NESTED), { decodeEntities: false });
+    expect($('a').attr('href')).toBe('./sub-page.html');
+  });
+
+  it('within-topic absolute link: /projects/penang-trip/sub → ./sub.html', () => {
+    const html = `<html><body><a href="/projects/penang-trip/sub-page">sub</a></body></html>`;
+    const $ = cheerio.load(rewriteHtml(html, NESTED), { decodeEntities: false });
+    expect($('a').attr('href')).toBe('./sub-page.html');
+  });
+
+  it('within-topic root link: ../../projects/penang-trip/ → ./index.html', () => {
+    const html = `<html><body><a href="../../projects/penang-trip/">root</a></body></html>`;
+    const $ = cheerio.load(rewriteHtml(html, NESTED), { decodeEntities: false });
+    expect($('a').attr('href')).toBe('./index.html');
+  });
+
+  it('cross-topic link from nested topic is neutered (not mis-matched as within-topic)', () => {
+    const html = `<html><body><a href="../../areas/health/page">other</a></body></html>`;
+    const $ = cheerio.load(rewriteHtml(html, NESTED), { decodeEntities: false });
+    const a = $('a');
+    expect(a.attr('href')).toBeUndefined();
+    expect(a.hasClass('export-external-link')).toBe(true);
+  });
+
+  it('does not mis-match a sibling topic with shared prefix as within-topic', () => {
+    // topic is "projects/penang-trip"; this href targets a sibling "projects/penang-trip-2"
+    const html = `<html><body><a href="../../projects/penang-trip-2/page">sibling</a></body></html>`;
+    const $ = cheerio.load(rewriteHtml(html, NESTED), { decodeEntities: false });
+    expect($('a').attr('href')).toBeUndefined();
+    expect($('a').hasClass('export-external-link')).toBe(true);
+  });
+
+  it('within-topic link with fragment: ../../projects/penang-trip/sub#sec → ./sub.html#sec', () => {
+    const html = `<html><body><a href="../../projects/penang-trip/sub-page#section">x</a></body></html>`;
+    const $ = cheerio.load(rewriteHtml(html, NESTED), { decodeEntities: false });
+    expect($('a').attr('href')).toBe('./sub-page.html#section');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildTopicExport — nested PARA topic
+// ---------------------------------------------------------------------------
+
+describe('buildTopicExport — nested PARA topic', () => {
+  const NESTED = 'projects/penang-trip';
+  let tmpQuartz, tmpZip, listing;
+
+  beforeAll(async () => {
+    tmpQuartz = fs.mkdtempSync(path.join(os.tmpdir(), 'rockybot-quartz-'));
+    const topicDir = path.join(tmpQuartz, NESTED);
+    fs.mkdirSync(topicDir, { recursive: true });
+    fs.mkdirSync(path.join(tmpQuartz, 'static'), { recursive: true });
+
+    // Simulate a depth-2 Quartz output: two ../ to reach the root
+    fs.writeFileSync(path.join(topicDir, 'index.html'), `
+      <!DOCTYPE html><html><head>
+        <link href="../../index.css" rel="stylesheet">
+      </head><body>
+        <div id="content">
+          <a href="../../projects/penang-trip/sub-page">sub</a>
+          <a href="../../areas/health/page">cross-topic</a>
+          <img src="../../static/icon.png">
+        </div>
+      </body></html>`);
+    fs.writeFileSync(path.join(topicDir, 'sub-page.html'),
+      `<html><body><a href="../../projects/penang-trip/">back</a></body></html>`);
+    fs.writeFileSync(path.join(tmpQuartz, 'index.css'), 'body{}');
+    fs.writeFileSync(path.join(tmpQuartz, 'static', 'icon.png'), 'PNGSTUB');
+
+    const buf = await buildZip(tmpQuartz, NESTED);
+    tmpZip = path.join(os.tmpdir(), `rockybot-nested-test-${Date.now()}.zip`);
+    fs.writeFileSync(tmpZip, buf);
+    listing = execSync(`unzip -l "${tmpZip}"`).toString();
+  });
+
+  afterAll(() => {
+    try { fs.unlinkSync(tmpZip); } catch (_) {}
+    try { fs.rmSync(tmpQuartz, { recursive: true, force: true }); } catch (_) {}
+  });
+
+  it('contains index.html at ZIP root (not under projects/penang-trip/)', () => {
+    expect(listing).toContain('index.html');
+    expect(listing).not.toContain('projects/penang-trip/index.html');
+  });
+
+  it('contains sub-page.html at ZIP root', () => {
+    expect(listing).toContain('sub-page.html');
+  });
+
+  it('contains index.css at ZIP root', () => {
+    expect(listing).toContain('index.css');
+  });
+
+  it('contains static/icon.png', () => {
+    expect(listing).toContain('static/icon.png');
+  });
+
+  it('index.html has rewritten CSS path (no .. prefix)', () => {
+    const content = execSync(`unzip -p "${tmpZip}" index.html`).toString();
+    expect(content).toContain('href="index.css"');
+    expect(content).not.toContain('href="../');
+    expect(content).not.toContain('href="../../');
+  });
+
+  it('within-topic link in index.html is rewritten to ./sub-page.html', () => {
+    const content = execSync(`unzip -p "${tmpZip}" index.html`).toString();
+    expect(content).toContain('href="./sub-page.html"');
+  });
+
+  it('cross-topic link in index.html is neutered', () => {
+    const content = execSync(`unzip -p "${tmpZip}" index.html`).toString();
+    expect(content).not.toContain('href="../../areas/');
+    expect(content).toContain('export-external-link');
+  });
+
+  it('within-topic root link in sub-page.html is rewritten to ./index.html', () => {
+    const content = execSync(`unzip -p "${tmpZip}" sub-page.html`).toString();
+    expect(content).toContain('href="./index.html"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Content-Disposition filename — slashes flattened
+// ---------------------------------------------------------------------------
+
+describe('buildTopicExport — Content-Disposition filename', () => {
+  function captureHeaders(quartzOutput, topicSlug) {
+    return new Promise((resolve, reject) => {
+      const headers = {};
+      const res = new PassThrough();
+      res.setHeader = (k, v) => { headers[k] = v; };
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('error', reject);
+      buildTopicExport(quartzOutput, topicSlug, res).then(() => resolve(headers)).catch(reject);
+    });
+  }
+
+  it('flat slug → my-topic-export.zip', async () => {
+    const headers = await captureHeaders(FIXTURE_QUARTZ, TOPIC);
+    expect(headers['Content-Disposition']).toBe('attachment; filename="my-topic-export.zip"');
+  });
+
+  it('nested slug → projects-penang-trip-export.zip (no slashes in filename)', async () => {
+    const tmpQuartz = fs.mkdtempSync(path.join(os.tmpdir(), 'rockybot-cd-'));
+    try {
+      const topicDir = path.join(tmpQuartz, 'projects', 'penang-trip');
+      fs.mkdirSync(topicDir, { recursive: true });
+      fs.writeFileSync(path.join(topicDir, 'index.html'), '<html></html>');
+      const headers = await captureHeaders(tmpQuartz, 'projects/penang-trip');
+      expect(headers['Content-Disposition']).toBe('attachment; filename="projects-penang-trip-export.zip"');
+    } finally {
+      fs.rmSync(tmpQuartz, { recursive: true, force: true });
+    }
+  });
+});

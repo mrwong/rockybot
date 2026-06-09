@@ -74,14 +74,11 @@ function runBuild(vaultPath, quartzOutput) {
       { stdio: 'inherit' }
     );
 
-    // Generate a root index so Quartz produces index.html at the site root
-    const topicLinks = topics.map(t => {
-      const displayName = t.split('/').pop().replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      return `- [[${t}/index|${displayName}]]  ·  [⬇ Export ZIP](/export/${t})`;
-    }).join('\n');
+    // Generate a root index so Quartz produces index.html at the site root.
+    // Mirrors the PARA directory shape so deeply nested topics are findable.
     fs.outputFileSync(
       path.join(QUARTZ_SRC, 'content', 'index.md'),
-      `---\ntitle: Research\n---\n\n# Research\n\n${topicLinks}\n`
+      `---\ntitle: Research\n---\n\n# Research\n\n${renderRootIndex(topics)}\n`
     );
 
     logger.info('Running quartz build');
@@ -101,4 +98,72 @@ function runBuild(vaultPath, quartzOutput) {
   }
 }
 
-module.exports = { scheduleRebuild, runBuild, getPublishedTopics };
+function titleCase(s) {
+  return s.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function buildTree(topics) {
+  const root = { children: new Map(), topic: null };
+  for (const t of topics) {
+    let cur = root;
+    for (const seg of t.split('/')) {
+      if (!cur.children.has(seg)) cur.children.set(seg, { children: new Map(), topic: null });
+      cur = cur.children.get(seg);
+    }
+    cur.topic = t;
+  }
+  return root;
+}
+
+// Sort entries so leaf topics come before group folders, alphabetically within each.
+function sortEntries(entries) {
+  return [...entries].sort(([sa, na], [sb, nb]) => {
+    const aLeaf = na.topic && na.children.size === 0;
+    const bLeaf = nb.topic && nb.children.size === 0;
+    if (aLeaf !== bLeaf) return aLeaf ? -1 : 1;
+    return sa.localeCompare(sb);
+  });
+}
+
+function renderNode(node, depth, lines) {
+  const indent = '  '.repeat(depth);
+  for (const [seg, child] of sortEntries(node.children)) {
+    const isLeaf = child.topic && child.children.size === 0;
+    if (isLeaf) {
+      lines.push(`${indent}- [[${child.topic}/index|${titleCase(seg)}]]  ·  [⬇ Export ZIP](/export/${child.topic})`);
+      continue;
+    }
+    // Group folder (may itself be a published topic — rare but possible)
+    lines.push(`${indent}- **${seg}/**`);
+    if (child.topic) {
+      lines.push(`${indent}  - [[${child.topic}/index|(index)]]  ·  [⬇ Export ZIP](/export/${child.topic})`);
+    }
+    renderNode(child, depth + 1, lines);
+  }
+}
+
+function renderRootIndex(topics) {
+  const tree = buildTree(topics);
+  const lines = [];
+  const top = sortEntries(tree.children);
+  const leaves  = top.filter(([_, n]) => n.topic && n.children.size === 0);
+  const buckets = top.filter(([_, n]) => !(n.topic && n.children.size === 0));
+
+  for (const [seg, node] of leaves) {
+    lines.push(`- [[${node.topic}/index|${titleCase(seg)}]]  ·  [⬇ Export ZIP](/export/${node.topic})`);
+  }
+
+  for (const [seg, node] of buckets) {
+    lines.push('');
+    lines.push(`## ${titleCase(seg)}`);
+    lines.push('');
+    if (node.topic) {
+      lines.push(`- [[${node.topic}/index|(index)]]  ·  [⬇ Export ZIP](/export/${node.topic})`);
+    }
+    renderNode(node, 0, lines);
+  }
+
+  return lines.join('\n');
+}
+
+module.exports = { scheduleRebuild, runBuild, getPublishedTopics, renderRootIndex };

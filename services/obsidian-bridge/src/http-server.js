@@ -10,8 +10,10 @@ const logger = require('./logger');
 const { version } = require('../package.json');
 const VERSION_BODY = JSON.stringify({ version });
 
-// Only lowercase letters, digits, and hyphens — blocks ../, encoded traversal, null bytes
-const SLUG_RE = /^[a-z0-9-]+$/;
+// Lowercase letters, digits, hyphens; forward slashes allowed only as segment separators
+// between non-empty segments (one slash at a time, no leading/trailing/duplicate).
+// Blocks ../, encoded traversal, null bytes.
+const SLUG_RE = /^[a-z0-9-]+(?:\/[a-z0-9-]+)*$/;
 
 // Tracks in-progress exports to prevent duplicate concurrent builds
 const inProgress = new Set();
@@ -30,7 +32,7 @@ function createExportServer(port, quartzOutput, vaultPath) {
       return;
     }
 
-    const match = req.url.match(/^\/export\/([^/?#]+)$/);
+    const match = req.url.match(/^\/export\/([^?#]+)$/);
     if (!match) {
       res.writeHead(404);
       res.end('Not Found');
