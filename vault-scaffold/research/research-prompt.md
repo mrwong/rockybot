@@ -1,14 +1,15 @@
 ---
 tags: [system, research, prompt]
 created: 2026-04-17
-description: "The prompt template sent to Claude for each research request. Edit here to change research output style."
+description: "Prompt template the research watcher sends to Claude. Synced from rockybot scaffold on bot restart — see info callout for edit policy."
 ---
 
 # Research Prompt
 
-This is the prompt template the research watcher sends to Claude when processing a request from `research/inbox/`. Edit this file in Obsidian to change how Claude approaches research tasks — the watcher reads it live from the vault on each run.
+> [!info] How edits to this file behave
+> This file is replaced on bot restart from `vault-scaffold/research/research-prompt.md` in the rockybot repo. Edits made here in Obsidian take effect on the next watcher run but will be overwritten on the next bot restart — your previous version is saved to `research/.prompts-backup/research-prompt-<timestamp>.md` so nothing is lost. To make changes permanent, edit the scaffold in the rockybot repo and ship a new bot version.
 
-The tokens `{{SEED_PATH}}` and `{{SEED_CONTENTS}}` are substituted by the watcher before the prompt is sent.
+The watcher sends this prompt to Claude when processing a request from `research/inbox/`. The tokens `{{SEED_PATH}}` and `{{SEED_CONTENTS}}` are substituted by the watcher before the prompt is sent.
 
 ---
 
@@ -65,7 +66,7 @@ multiple sources for anything consequential.
 
 ### Step 4 — Build the pages
 
-Create a folder at `research/<topic-slug>/` containing:
+Create a folder at `research/outbox/<topic-slug>/` containing:
 - `index.md` — overview, key concepts, TL;DR, links to sub-pages
 - Sub-pages for each distinct aspect worth its own page (e.g. `options-comparison.md`,
   `implementation-notes.md`, `tradeoffs.md`)
@@ -103,31 +104,14 @@ sources:
 Write in first-person reference style — direct, useful, written for future-me.
 Not formal documentation. Include concrete commands, configs, or code where applicable.
 
-### Step 5 — Update the research index and backlink existing pages
+### Step 5 — Do NOT update `research/index.md` or backlink existing pages
 
-**5a — Update `research/index.md`:**
-- Add the new topic under `## Completed research` (create the section if it doesn't exist).
-- Include a one-line description and a `[[wikilink]]` to the new topic index.
-- Scan the existing topic list: if any existing entry is clearly related to the new topic,
-  add a "See also" note on that existing line (don't rewrite the entry, just append it).
+These are deferred to filing time. The user will move the outbox folder into the correct PARA
+bucket (`projects/`, `areas/`, `resources/`, or `archive/`) manually; the relink watcher fires on
+that move and handles the wikilink + frontmatter repair. Doing the index update or backlinks now
+would write paths under `research/outbox/...` that the watcher would just have to rewrite.
 
-**5b — Backlink existing related pages (the Karpathy ingest pass):**
-
-For each page in your working list from Step 2, open the file and add a reference to the new
-topic. This is what makes the wiki compound — every new topic propagates backlinks into the
-existing graph, not just forward links out of it.
-
-How to add the backlink:
-- If the existing page has a `## See also` or `## Related` section: add a bullet with
-  `[[research/<new-topic>/index]]` and a one-line description of the connection.
-- If it doesn't: add a `> See also: [[research/<new-topic>/index]] — <one-line reason>` callout
-  in the most relevant section.
-- If the connection is deep enough to warrant a sentence: write it inline in the relevant section,
-  not just a footnote.
-
-Target 5–10 existing pages updated per ingest. A new topic that connects to nothing is a dead end.
-
-If the new research links to homelab topics, add backlinks in the relevant `homelab/` pages too.
+Skip ahead to Step 6.
 
 ### Step 6 — Update the research journal
 
@@ -153,7 +137,7 @@ Append a new entry at the **top** (most recent first) in this format:
 ```markdown
 ## <YYYY-MM-DD> — <Topic title>
 
-**Output**: [[research/<topic-slug>/index]]
+**Output**: [[research/outbox/<topic-slug>/index]]
 **Related prior work**: [[research/other-topic/index]] (if any; omit if first entry)
 
 <2–4 sentences>: What was the core finding? How does it connect to or extend prior research?

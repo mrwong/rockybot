@@ -167,4 +167,4 @@ docker pull ghcr.io/mrwong/rockybot:latest
 docker compose up -d   # or restart your docker run container with the same flags
 ```
 
-rockybot never overwrites vault files that already exist — seeded prompt templates you've customized are safe.
+User-owned vault files (e.g. `research/index.md`, your topic folders, journal) are never overwritten on startup. Prompt templates (`research/*-prompt.md`) are bot-controlled and re-synced from the image scaffold on every restart; if your live copy differs from the new scaffold, the previous version is saved to `research/.prompts-backup/<name>-<timestamp>.md` before being replaced. See [WORKFLOW.md → Editable prompts](WORKFLOW.md#editable-prompts).

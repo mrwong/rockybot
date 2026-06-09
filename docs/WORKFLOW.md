@@ -207,7 +207,7 @@ research/
 
 ## Editable prompts
 
-All prompt templates live in your vault and can be edited directly in Obsidian. rockybot reads them on each poll cycle — no restart needed to change bot behavior.
+Prompt templates live in your vault as `research/*-prompt.md` and the watchers read them on each poll cycle. Editing in Obsidian takes effect on the next watcher run — but understand the sync policy below before relying on those edits.
 
 | File | Controls |
 |---|---|
@@ -215,9 +215,21 @@ All prompt templates live in your vault and can be edited directly in Obsidian. 
 | `research/amend-prompt.md` | How Claude handles `[!claude]` inline tasks |
 | `research/expand-prompt.md` | How Claude creates sub-pages from `[!expand]` |
 | `research/revise-prompt.md` | How Claude performs corpus revision via `[!revise]` |
+| `research/consolidate-prompt.md` | How Claude merges topics via `[!consolidate]` |
+| `research/relink-prompt.md` | How Claude repairs links after topic moves |
 | `research/lint-prompt.md` | How Claude audits the wiki |
 
-If a vault prompt file is missing or deleted, rockybot falls back to the built-in default prompt baked into the image.
+### Sync policy on bot restart
+
+Prompts are bot-controlled, not user-owned. On every bot startup the seeder compares each `*-prompt.md` against the image scaffold (`vault-scaffold/research/*-prompt.md`):
+
+- **Match** → no-op.
+- **Differ** → the live copy is moved to `research/.prompts-backup/<name>-YYYYMMDD-HHMMSS.md`, then replaced with the scaffold version.
+- **Missing** → seeded from scaffold (no backup needed).
+
+This means experimental edits in Obsidian are great for "try a tweak and see what happens on the next poll," but won't survive a bot restart. To make a prompt change permanent, edit the scaffold in the rockybot repo (`vault-scaffold/research/<name>-prompt.md`) and ship a new bot image.
+
+If a vault prompt file is deleted, rockybot re-seeds it from the scaffold on the next restart. If both vault and scaffold are missing, the bot falls back to a built-in default prompt baked into the watcher code.
 
 ---
 
@@ -231,5 +243,5 @@ If a vault prompt file is missing or deleted, rockybot falls back to the built-i
 | Discord alert: "Claude auth expired" | Claude subscription session lapsed | Re-run `claude login` on the Docker host; alert fires at most 2× per day |
 | `[!claude]` callout not processed | Regex didn't match | Ensure callout is `> [!claude]` at the **start of a line**, not inside a code block |
 | Callout processed but output poor | Budget exhausted mid-task | Raise `AMEND_BUDGET_USD`, or split into smaller callouts |
-| Prompt edits not taking effect | Edited the wrong file | Edit the vault copy (`research/*-prompt.md`), not the image scaffold |
+| Prompt edits work, then revert after a restart | This is the sync policy | Live prompts are replaced from the scaffold on bot restart (with backup to `research/.prompts-backup/`). For permanent changes, edit the scaffold in the rockybot repo and ship a new image. See [Editable prompts](#editable-prompts) |
 | Output not appearing in Obsidian | Sync delay | Wait 1–2 min for Obsidian Sync; check that Obsidian is connected |

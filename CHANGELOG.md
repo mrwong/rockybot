@@ -2,6 +2,14 @@
 
 All notable changes to rockybot are documented here. Version numbers follow [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`. Documentation-only changes do not increment the version.
 
+## [1.6.0] — 2026-06-08
+
+### Changed
+
+- **Prompt scaffolds now sync to the vault on bot restart.** The seeder previously only seeded prompt files when missing (the "create if missing" policy), so any scaffold changes shipped in a new bot image silently never reached existing deployments — a real footgun, and the root cause of the v1.5.0 outbox-first behavior failing to take effect. The new policy: `*-prompt.md` files are bot-controlled. On every startup the seeder compares live vs scaffold; if they differ, the live copy is moved to `research/.prompts-backup/<name>-YYYYMMDD-HHMMSS.md` and the scaffold version takes its place. User-owned files (`research/index.md`, topic folders, journal) keep the old "create if missing" behavior — nothing the user writes is ever overwritten. Each prompt scaffold now carries an `> [!info]` callout in Obsidian explaining the policy and pointing at the backup path.
+- **Scaffold prompts brought into agreement with the v1.5.0 outbox-first design.** `vault-scaffold/research/research-prompt.md` Step 4 now writes to `research/outbox/<topic-slug>/`, Step 5 (index update + Karpathy backlinks) is deferred to filing time, and the Step 6 journal entry points at the outbox path. The relink watcher rewrites these when the user files the outbox folder into a PARA bucket.
+- **Documentation updates.** `docs/WORKFLOW.md` "Editable prompts" section rewritten to explain the sync policy and how to make permanent prompt changes; `docs/INSTALLATION.md` "Updating" note corrected (was claiming nothing is ever overwritten, which is no longer true for prompts).
+
 ## [1.5.0] — 2026-06-06
 
 ### Changed

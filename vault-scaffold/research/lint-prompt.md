@@ -1,12 +1,15 @@
 ---
 tags: [system, research, prompt]
 created: 2026-04-18
-description: "Prompt template for the lint pass. Runs when research/lint-trigger.md is set to status: pending."
+description: "Prompt template for the lint pass. Synced from rockybot scaffold on bot restart — see info callout for edit policy."
 ---
 
 # Lint Prompt
 
-This is the prompt template the research watcher sends to Claude when `research/lint-trigger.md` has `status: pending`. Edit this file in Obsidian to change how Claude performs the lint pass.
+> [!info] How edits to this file behave
+> This file is replaced on bot restart from `vault-scaffold/research/lint-prompt.md` in the rockybot repo. Edits made here in Obsidian take effect on the next watcher run but will be overwritten on the next bot restart — your previous version is saved to `research/.prompts-backup/lint-prompt-<timestamp>.md` so nothing is lost. To make changes permanent, edit the scaffold in the rockybot repo and ship a new bot version.
+
+The lint watcher sends this prompt to Claude when `research/lint-trigger.md` has `status: pending`.
 
 The token `{{VAULT_PATH}}` is substituted by the watcher before the prompt is sent.
 

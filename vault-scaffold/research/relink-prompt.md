@@ -1,10 +1,13 @@
 ---
 tags: [system, research, prompt]
 created: 2026-06-06
-description: "Prompt template for the relink watcher — fixes prose references and gardens frontmatter after topic moves"
+description: "Prompt template for the relink watcher. Synced from rockybot scaffold on bot restart — see info callout for edit policy."
 ---
 
 # Relink Prompt
+
+> [!info] How edits to this file behave
+> This file is replaced on bot restart from `vault-scaffold/research/relink-prompt.md` in the rockybot repo. Edits made here in Obsidian take effect on the next watcher run but will be overwritten on the next bot restart — your previous version is saved to `research/.prompts-backup/relink-prompt-<timestamp>.md` so nothing is lost. To make changes permanent, edit the scaffold in the rockybot repo and ship a new bot version.
 
 This prompt is used by the **relink watcher** when it detects that topic folders have been moved within the vault. Obsidian handles wikilink updates automatically on move; this prompt handles what Obsidian cannot: prose references to old locations and stale `para:` / `updated:` frontmatter fields.
 
