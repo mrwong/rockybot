@@ -161,21 +161,27 @@ You can download any published topic as a self-contained ZIP for offline reading
 
 **How it works:**
 
-On the notes-web root index (`http://notes.yourdomain/`), each published topic has a **⬇ Export ZIP** link next to it. Click the link to download the topic as a `.zip` file immediately — generation takes under a second for typical topics.
+On the notes-web root index (`http://notes.yourdomain/`), each published topic has a **⬇ Export ZIP** link next to it. Click the link to download that single topic as a `.zip` file immediately — generation takes under a second for typical topics.
 
-The ZIP contains:
+The single-topic ZIP contains:
 - All rendered HTML pages for the topic (index + sub-pages)
 - Quartz CSS, JavaScript, and fonts so pages render correctly offline
 - Cross-topic links converted to non-clickable text (the content is there, the link isn't)
 
 Open the extracted `index.html` in any browser — no server, no internet required.
 
-**What doesn't work in the ZIP:**
+### Exporting several topics at once
+
+The root index also has an **⬇ Export multiple topics as a ZIP** selector. Expand it, tick the topics you want, and click **⬇ Export selected** to download them all as one bundle.
+
+The key difference from a single-topic export: **links between topics you include in the same bundle resolve locally.** Each topic keeps its own folder in the ZIP (`my-topic/`, `projects/penang-trip/`, …) with a shared stylesheet and a landing `index.html` listing everything included. A link from one included topic to another included topic works when you open the files offline; a link to a topic you *didn't* include is disabled (non-clickable, like the single-topic export). So if you want cross-references to survive, select all the related topics together.
+
+**What doesn't work in either ZIP:**
 - Full-text search (requires a server to build the search index)
 - The interactive graph view (requires JS fetches)
-- Links to pages in other topics
+- Links to topics not included in the bundle
 
-**Security:** Only published topics (`publish: true` in `index.md`) can be exported. The export endpoint validates against the current publish list on every request — revoking `publish: true` immediately blocks exports, even before the Quartz rebuild completes.
+**Security:** Only published topics (`publish: true` in `index.md`) can be exported. The export endpoint validates every requested slug against the current publish list on every request — revoking `publish: true` immediately blocks exports, even before the Quartz rebuild completes. A multi-topic request is all-or-nothing (any unpublished or unbuilt slug rejects the whole request) and is capped at 25 topics.
 
 ---
 
