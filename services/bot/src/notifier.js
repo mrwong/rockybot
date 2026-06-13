@@ -106,4 +106,53 @@ async function notifyAuthExpired() {
     .catch(e => logger.warn(`Discord auth notify failed: ${e.message}`));
 }
 
-module.exports = { notify, notifyAuthExpired };
+// Fires when subscription billing hits the usage limit (webhook-only / non-interactive mode).
+// Never throws.
+async function notifyRateLimitHit(label, resetTime) {
+  if (!DISCORD_WEBHOOK_URL) return;
+  const resetStr = resetTime
+    ? `Resets at **${resetTime.toUTCString()}** — holding until then.`
+    : 'Reset time unknown — will retry every 30 minutes.';
+  const taskLine = label ? `\n**Task:** *${label}*` : '';
+  await sendDiscord(
+    '⏳ rockybot: Claude usage limit reached',
+    `Subscription billing is paused.${taskLine}\n${resetStr}`,
+    COLOR_WARN,
+  ).catch(e => logger.warn(`Discord rate-limit notify failed: ${e.message}`));
+}
+
+// Fires when the 24h hold expires and the bot gives up waiting. Never throws.
+async function notifyRateLimitFallback(label) {
+  if (!DISCORD_WEBHOOK_URL) return;
+  const taskLine = label ? `\n**Task:** *${label}*` : '';
+  await sendDiscord(
+    '💰 rockybot: Rate limit hold expired — using API key',
+    `Still rate-limited after 24 hours.${taskLine}\nFalling back to API key billing now.`,
+    COLOR_WARN,
+  ).catch(e => logger.warn(`Discord rate-limit fallback notify failed: ${e.message}`));
+}
+
+// Fires when a new inbox item is queued during quiet hours (webhook-only / non-interactive mode).
+// Interactive mode uses discordBot.notifyQuietHoursItem() instead (sends a button).
+// Never throws.
+async function notifyQuietHoursItemWebhook(filename) {
+  if (!DISCORD_WEBHOOK_URL) return;
+  const displayName = filename.replace(/\.md$/, '').replace(/-/g, ' ');
+  await sendDiscord(
+    '📥 rockybot: research item queued',
+    `*${displayName}* is waiting for quiet hours to end.\nTo run it immediately, enable interactive mode and use the Discord bot.`,
+    COLOR_WARN,
+  ).catch(e => logger.warn(`Discord quiet-hours notify failed: ${e.message}`));
+}
+
+// Fires once at container startup. Never throws.
+async function notifyStartup(version) {
+  if (!DISCORD_WEBHOOK_URL) return;
+  await sendDiscord(
+    `🤖 rockybot v${version} started`,
+    'Bot is online and polling.',
+    COLOR_SUCCESS,
+  ).catch(e => logger.warn(`Discord startup notify failed: ${e.message}`));
+}
+
+module.exports = { notify, notifyAuthExpired, notifyRateLimitHit, notifyRateLimitFallback, notifyQuietHoursItemWebhook, notifyStartup };

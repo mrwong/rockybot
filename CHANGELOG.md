@@ -2,6 +2,93 @@
 
 All notable changes to rockybot are documented here. Version numbers follow [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`. Documentation-only changes do not increment the version.
 
+## [1.7.0] — 2026-06-09
+
+### Added
+
+- **Multi-topic export bundles.** The notes-web root index now has an **⬇ Export multiple topics as a ZIP** selector (a checkbox per published topic plus an *Export selected* button) alongside the existing per-topic quick links. Selecting several subject areas downloads them as a single ZIP via `GET /export?slugs=a,b,projects/c`. Unlike the single-topic export (which flattens one topic to the ZIP root and neuters every cross-topic link), the multi-topic bundle **preserves Quartz's directory layout** (`<slug>/…` with a shared root `index.css` + `static/` and a generated landing `index.html`), so a cross-topic link **resolves locally when its target topic is also in the selection** and is neutered otherwise. Nested PARA slugs are supported and link depth is computed correctly. All single-topic security gates apply per slug (format, publish-whitelist, build-existence), all-or-nothing; the request is capped at 25 topics and concurrency-guarded on the selection. New modules: `services/obsidian-bridge/src/export-ui.js` (root-index widget injection) and `buildMultiExport`/`rewriteHtmlMulti` in `export-builder.js`; nginx now proxies the bare `/export` path in addition to `/export/<slug>`.
+
+### Fixed
+
+- **Topic export ZIP returned 404 for nested PARA topics.** After the vault was reorganized into PARA buckets (`research/projects/`, `research/areas/`, etc.), the export server's slug gate rejected slugs containing slashes — both the URL match `/^\/export\/([^/?#]+)$/` and the format check `/^[a-z0-9-]+$/` allowed only flat slugs. The URL match now accepts the rest of the path after `/export/`, and the format check allows `/`-separated segments (each still constrained to `[a-z0-9-]+`), so `/export/projects/penang-trip` and `/export/resources/hobbies/boardgames/heavy-2026` now resolve correctly. Path traversal is still blocked: `..` is rejected by the segment regex, empty segments (trailing or duplicate `/`) are rejected, and the existing publish-whitelist gate continues to enforce that only `publish: true` topics can be exported.
+
+- **Export ZIP HTML rewriting now handles nested-topic depth.** For a topic at `projects/penang-trip/`, Quartz emits `../../index.css` and `../../projects/penang-trip/sub-page` (one `..` per ancestor of the page). The export builder previously stripped only a single `../` from resource paths and only matched one-level-up within-topic links. Both now strip/match an arbitrary number of leading `../` segments, so resource paths (`index.css`, `static/`) and within-topic anchors render correctly at any nesting depth. Cross-topic links from nested topics continue to neuter cleanly — there is no false within-topic match against sibling topics that share a prefix.
+
+- **Content-Disposition filename flattens slashes.** Nested slug `projects/penang-trip` produced an invalid filename `projects/penang-trip-export.zip` containing a directory separator; it is now flattened to `projects-penang-trip-export.zip`.
+
+### Changed
+
+- **Notes-web root index now mirrors the PARA directory shape.** Previously every published topic rendered as a single flat bullet list, which made deeply nested topics hard to find. The root `index.md` generator (in obsidian-bridge's quartz-builder) now builds a tree from the topic slugs: top-level slugs render as bullets at the top of the page, each PARA bucket (`projects/`, `areas/`, `resources/`, `archive/`) gets an `## H2` section, and sub-folders render as indented `**name/**` group bullets with their topics nested underneath. Within each tier, leaf topics come before sub-folder groups, and entries are sorted alphabetically. Every leaf still carries both a wikilink to the topic and an `⬇ Export ZIP` link.
+
+## [1.6.0] — 2026-06-08
+
+### Changed
+
+- **Prompt scaffolds now sync to the vault on bot restart.** The seeder previously only seeded prompt files when missing (the "create if missing" policy), so any scaffold changes shipped in a new bot image silently never reached existing deployments — a real footgun, and the root cause of the v1.5.0 outbox-first behavior failing to take effect. The new policy: `*-prompt.md` files are bot-controlled. On every startup the seeder compares live vs scaffold; if they differ, the live copy is moved to `research/.prompts-backup/<name>-YYYYMMDD-HHMMSS.md` and the scaffold version takes its place. User-owned files (`research/index.md`, topic folders, journal) keep the old "create if missing" behavior — nothing the user writes is ever overwritten. Each prompt scaffold now carries an `> [!info]` callout in Obsidian explaining the policy and pointing at the backup path.
+- **Scaffold prompts brought into agreement with the v1.5.0 outbox-first design.** `vault-scaffold/research/research-prompt.md` Step 4 now writes to `research/outbox/<topic-slug>/`, Step 5 (index update + Karpathy backlinks) is deferred to filing time, and the Step 6 journal entry points at the outbox path. The relink watcher rewrites these when the user files the outbox folder into a PARA bucket.
+- **Documentation updates.** `docs/WORKFLOW.md` "Editable prompts" section rewritten to explain the sync policy and how to make permanent prompt changes; `docs/INSTALLATION.md` "Updating" note corrected (was claiming nothing is ever overwritten, which is no longer true for prompts).
+
+## [1.5.0] — 2026-06-06
+
+### Changed
+
+- **Research output always lands in `research/outbox/<topic-slug>/`.** Previously the inbox watcher's prompt asked Claude to file each new topic into a PARA bucket directly. In practice this meant hunting for where research ended up after commissioning it. Claude now writes every completed topic to `research/outbox/` so the user can triage and file it (drag-drop into `projects/`, `areas/`, `resources/`, or `archive/`) at their own pace. The relink watcher already covers the wikilink repair on the move out of outbox, so the journal entry, prose references, and `para:` frontmatter all converge once the topic lands in its permanent home.
+
+- **Research prompt no longer touches `research/index.md` or backlinks existing pages on first write.** Both depend on the topic's final location, which the outbox-first workflow defers to filing time. The journal entry is still written immediately (and gets its wikilink rewritten by the relink watcher when the topic moves out of outbox).
+
+- **Relink watcher defaults to `haiku` instead of `sonnet`.** Now that the relink watcher fires on every outbox → PARA move, its work is mechanical enough (prose tweaks, `[[wikilink]]` rewrites, frontmatter dates) that haiku handles it cleanly. Sonnet remains available via `RELINK_MODEL=sonnet`. Per-move cost drops from ~$0.05 to ~$0.005.
+
+## [1.4.0] — 2026-06-06
+
+### Added
+
+- **Relink watcher.** Automatically detects when topic folders have been moved in Obsidian and repairs what Obsidian's link resolver cannot: prose references to old location names and stale `para:`/`updated:` frontmatter fields. Runs on every poll cycle with zero Claude cost when nothing has moved — the watcher computes a diff between a stored shape manifest (`research/wiki-shape.json`) and the current vault structure using pure JS. Claude is invoked only when moves are detected, and only reads the files that actually reference the moved topics, keeping per-session cost to $0.01–$0.10. After Claude runs, the manifest is updated so the next poll starts fresh. Configurable via `RELINK_BUDGET_USD` (default `$2.00`) and `RELINK_MODEL` (default `sonnet`). The prompt template lives in `research/relink-prompt.md` in the vault — edit it in Obsidian to change repair behavior without redeploying.
+
+## [1.3.0] — 2026-06-06
+
+### Added
+
+- **`[!consolidate]` watcher.** Place a `> [!consolidate]` callout in any research topic's `index.md` to merge one or more source topics into that target topic. The watcher reads the instruction text from the callout, merges source content into the target, updates all wikilinks across the vault pointing to the source, moves the source folder to `research/archive/`, and removes the callout when done. Configurable via `CONSOLIDATE_BUDGET_USD` (default `$4.00`) and `CONSOLIDATE_MODEL` (default `sonnet`). The prompt template lives in `research/consolidate-prompt.md` in the vault — edit it in Obsidian to change merge behavior without redeploying.
+
+- **`!research help` command.** New Discord text command that lists all available `!research` commands with one-line descriptions. Requires `DISCORD_INTERACTIVE_AUTH=true` and Message Content Intent.
+
+- **Enhanced `!research status`.** The status command now shows three additional lines alongside hold/gate state:
+  - **Watcher busy indicator** — `🔄 Watcher: running` when a Claude invocation is in progress, `⚙️ Watcher: idle` otherwise.
+  - **Next run countdown** — `⏱ Next run: in Xm Ys` showing time until the next scheduled poll.
+  - **▶️ Run now button** — interactive button that cancels the current interval and fires a poll immediately, then resets the interval from that point. Useful for testing a new research request without waiting for the next scheduled tick.
+
+## [1.2.0] — 2026-05-02
+
+### Added
+
+- **Quiet hours gate.** Set `RESEARCH_QUIET_HOURS="HH:MM-HH:MM"` (UTC) to suppress inbox research during a time window — e.g. `09:00-18:00` to keep the subscription quota free for interactive Claude Code sessions during the work day. Midnight-spanning windows are supported (`22:00-06:00`). When a new item arrives during quiet hours, the bot sends a per-item Discord notification with an **▶️ Run now** button so you can promote individual items without lifting the gate for everything.
+
+- **Per-item expedite.** Clicking the "Run now" button on a quiet-hours notification marks that specific item `status: expedited` in its frontmatter. Expedited items always run on the next poll regardless of quiet hours, hold, or pacing state — other queued items stay back. The button triggers an immediate poll so the item runs within seconds, not at the next poll interval.
+
+- **Request pacing.** Set `RESEARCH_MIN_INTERVAL_MINUTES=N` to enforce a minimum gap between consecutive research task completions. Prevents quota bursts when several items are queued at once; each completion resets the timer.
+
+- **Discord hold toggle.** Three new text commands available in your bot channel when `DISCORD_INTERACTIVE_AUTH=true`:
+  - `!research hold` — pauses all inbox research (silent; other watchers keep running)
+  - `!research release` — resumes inbox research
+  - `!research status` — reports hold state and current gate reason
+
+  Hold state is persisted to `research/.research-hold` in the vault, so it survives bot restarts. If the bot starts with hold active it logs a warning. Requires **Message Content Intent** enabled in the Discord developer portal.
+
+- **New `expedited` frontmatter status.** Items marked `status: expedited` in `research/inbox/` are processed immediately regardless of gate state, then follow the normal completed/awaiting-input/error flow.
+
+## [1.1.1] — 2026-04-30
+
+### Fixed
+
+- **Subscription usage limit now notifies Discord and holds instead of silently falling back.** Previously, hitting the Claude Pro/Max daily usage limit caused the bot to silently switch to API key billing without any notification. Root cause: Claude CLI emits "You've hit your limit · resets 7am (UTC)" on **stdout** (not stderr), so the error classifier missed it entirely and routed the failure to the auth handler, which then failed trying to run an OAuth login flow against a rate-limit error.
+
+  New behavior when `CLAUDE_SUBSCRIPTION_MODE=true` and the usage limit is hit:
+
+  - **Interactive mode** (`DISCORD_INTERACTIVE_AUTH=true`): posts a Discord message with two buttons — **⏳ Wait for reset** and **💰 Use API Key**. Bot holds the mutex until the user responds. Clicking "Wait" causes the bot to sleep until the parsed reset time (e.g. "7am UTC"), then automatically retry subscription billing. Clicking "Use API Key" falls back to paid billing immediately.
+  - **Webhook-only mode**: posts a Discord embed and auto-waits for the reset time without requiring user input.
+  - **24h hard cap**: if still rate-limited after 24 hours, posts another notification and falls back to the API key.
+  - Reset time is parsed directly from the CLI error message ("resets 7am (UTC)") so the bot sleeps to the exact reset moment.
+
 ## [1.1.0] — 2026-04-29
 
 ### Added

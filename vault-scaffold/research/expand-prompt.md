@@ -1,12 +1,15 @@
 ---
 tags: [system, research, prompt]
 created: 2026-04-19
-description: "Prompt template for [!expand] callout tasks. Edit here to change how Claude creates new sub-pages."
+description: "Prompt template for [!expand] callout tasks. Synced from rockybot scaffold on bot restart — see info callout for edit policy."
 ---
 
 # Expand Prompt
 
-This is the prompt template the research expand watcher sends to Claude when it finds a `> [!expand]` callout in a research file. Edit this file in Obsidian to change how expand tasks are handled — the watcher reads it live from the vault on each run.
+> [!info] How edits to this file behave
+> This file is replaced on bot restart from `vault-scaffold/research/expand-prompt.md` in the rockybot repo. Edits made here in Obsidian take effect on the next watcher run but will be overwritten on the next bot restart — your previous version is saved to `research/.prompts-backup/expand-prompt-<timestamp>.md` so nothing is lost. To make changes permanent, edit the scaffold in the rockybot repo and ship a new bot version.
+
+The expand watcher sends this prompt to Claude when it finds a `> [!expand]` callout in a research file.
 
 The token `{{FILE_PATH}}` is substituted with the target file's absolute path before the prompt is sent.
 

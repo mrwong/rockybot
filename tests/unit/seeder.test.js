@@ -4,53 +4,118 @@ const fs   = require('fs-extra');
 const path = require('path');
 const os   = require('os');
 
-// Point seeder at a temp scaffold dir for testing
-const SCAFFOLD_FIXTURE = path.join(__dirname, '../fixtures/scaffold');
+let tmpScaffold;
+let tmpVault;
+let seedVault;
+
+beforeEach(async () => {
+  tmpScaffold = await fs.mkdtemp(path.join(os.tmpdir(), 'rockybot-scaffold-'));
+  tmpVault    = await fs.mkdtemp(path.join(os.tmpdir(), 'rockybot-vault-'));
+  process.env._TEST_SCAFFOLD_DIR = tmpScaffold;
+  jest.resetModules();
+  ({ seedVault } = require('../../services/bot/src/seeder'));
+});
+
+afterEach(async () => {
+  await fs.remove(tmpScaffold);
+  await fs.remove(tmpVault);
+  delete process.env._TEST_SCAFFOLD_DIR;
+});
+
+async function writeScaffold(relPath, content) {
+  const full = path.join(tmpScaffold, relPath);
+  await fs.ensureDir(path.dirname(full));
+  await fs.writeFile(full, content);
+}
+
+async function writeVault(relPath, content) {
+  const full = path.join(tmpVault, relPath);
+  await fs.ensureDir(path.dirname(full));
+  await fs.writeFile(full, content);
+}
+
+async function readVault(relPath) {
+  return fs.readFile(path.join(tmpVault, relPath), 'utf8');
+}
 
 describe('seedVault', () => {
-  let tmpVault;
+  it('copies missing files into the vault', async () => {
+    await writeScaffold('research/index.md', '# Research\n');
+    await writeScaffold('research/research-prompt.md', '# Research Prompt scaffold\n');
 
-  beforeAll(async () => {
-    // Create a minimal fixture scaffold
-    await fs.ensureDir(path.join(SCAFFOLD_FIXTURE, 'research'));
-    await fs.writeFile(path.join(SCAFFOLD_FIXTURE, 'research/index.md'), '# Research\n');
-    await fs.writeFile(path.join(SCAFFOLD_FIXTURE, 'research/prompt.md'), '# Prompt\n');
+    await seedVault(tmpVault);
+
+    expect(await readVault('research/index.md')).toBe('# Research\n');
+    expect(await readVault('research/research-prompt.md')).toBe('# Research Prompt scaffold\n');
   });
 
-  beforeEach(async () => {
-    tmpVault = await fs.mkdtemp(path.join(os.tmpdir(), 'rockybot-test-'));
-    // Override the module's scaffold dir via the env var pattern used in seeder
-    process.env._TEST_SCAFFOLD_DIR = SCAFFOLD_FIXTURE;
+  it('does not overwrite existing user-owned files (non-prompt)', async () => {
+    await writeScaffold('research/index.md', '# Scaffold index\n');
+    await writeVault('research/index.md', '# My customized index\n');
+
+    await seedVault(tmpVault);
+
+    expect(await readVault('research/index.md')).toBe('# My customized index\n');
   });
 
-  afterEach(async () => {
-    await fs.remove(tmpVault);
-    delete process.env._TEST_SCAFFOLD_DIR;
+  it('overwrites prompt files when scaffold differs, backing up the live copy', async () => {
+    await writeScaffold('research/research-prompt.md', 'scaffold v2\n');
+    await writeVault('research/research-prompt.md', 'old live v1\n');
+
+    await seedVault(tmpVault);
+
+    expect(await readVault('research/research-prompt.md')).toBe('scaffold v2\n');
+
+    const backups = await fs.readdir(path.join(tmpVault, 'research/.prompts-backup'));
+    expect(backups).toHaveLength(1);
+    expect(backups[0]).toMatch(/^research-prompt-\d{8}-\d{6}\.md$/);
+
+    const backupContent = await fs.readFile(path.join(tmpVault, 'research/.prompts-backup', backups[0]), 'utf8');
+    expect(backupContent).toBe('old live v1\n');
   });
 
-  afterAll(async () => {
-    await fs.remove(SCAFFOLD_FIXTURE);
+  it('does not back up or overwrite prompt files when scaffold matches', async () => {
+    const content = 'identical content\n';
+    await writeScaffold('research/amend-prompt.md', content);
+    await writeVault('research/amend-prompt.md', content);
+
+    await seedVault(tmpVault);
+
+    expect(await readVault('research/amend-prompt.md')).toBe(content);
+    expect(await fs.pathExists(path.join(tmpVault, 'research/.prompts-backup'))).toBe(false);
   });
 
-  it('copies scaffold files into an empty vault', async () => {
-    // Directly test the walk logic with a known scaffold
-    const { seedVault } = require('../../services/bot/src/seeder');
-    // Temporarily override SCAFFOLD_DIR via monkey-patching isn't clean,
-    // so this test validates the logic works on its own fixture via fs.copy
-    await fs.copy(SCAFFOLD_FIXTURE, tmpVault, { overwrite: false });
-    const indexExists = await fs.pathExists(path.join(tmpVault, 'research/index.md'));
-    expect(indexExists).toBe(true);
+  it('backs up multiple drifted prompts in one run', async () => {
+    await writeScaffold('research/research-prompt.md', 'new research\n');
+    await writeScaffold('research/amend-prompt.md',    'new amend\n');
+    await writeVault('research/research-prompt.md',    'old research\n');
+    await writeVault('research/amend-prompt.md',       'old amend\n');
+
+    await seedVault(tmpVault);
+
+    expect(await readVault('research/research-prompt.md')).toBe('new research\n');
+    expect(await readVault('research/amend-prompt.md')).toBe('new amend\n');
+
+    const backups = await fs.readdir(path.join(tmpVault, 'research/.prompts-backup'));
+    expect(backups).toHaveLength(2);
+    expect(backups.some((n) => n.startsWith('research-prompt-'))).toBe(true);
+    expect(backups.some((n) => n.startsWith('amend-prompt-'))).toBe(true);
   });
 
-  it('does not overwrite existing vault files', async () => {
-    const targetFile = path.join(tmpVault, 'research/index.md');
-    await fs.ensureDir(path.dirname(targetFile));
-    await fs.writeFile(targetFile, '# My custom index\n');
+  it('skips silently when the scaffold dir does not exist', async () => {
+    await fs.remove(tmpScaffold);
+    await expect(seedVault(tmpVault)).resolves.not.toThrow();
+    const exists = await fs.pathExists(path.join(tmpVault, 'research'));
+    expect(exists).toBe(false);
+  });
 
-    // Copy scaffold with overwrite: false (same semantics as seedVault)
-    await fs.copy(SCAFFOLD_FIXTURE, tmpVault, { overwrite: false });
+  it('seeds nested scaffold directories', async () => {
+    await writeScaffold('research/topic-x/index.md', '# Topic X\n');
+    await writeScaffold('research/topic-x/sub.md',   '# Sub\n');
 
-    const contents = await fs.readFile(targetFile, 'utf8');
-    expect(contents).toBe('# My custom index\n');
+    await seedVault(tmpVault);
+
+    expect(await readVault('research/topic-x/index.md')).toBe('# Topic X\n');
+    expect(await readVault('research/topic-x/sub.md')).toBe('# Sub\n');
   });
 });

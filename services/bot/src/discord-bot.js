@@ -11,15 +11,25 @@ const logger = require('./logger');
 const INTERACTIVE_AUTH   = (process.env.DISCORD_INTERACTIVE_AUTH || '').toLowerCase() === 'true';
 const BOT_TOKEN          = process.env.DISCORD_BOT_TOKEN  || '';
 const CHANNEL_ID         = process.env.DISCORD_CHANNEL_ID || '';
-const TIMEOUT_MINUTES    = parseInt(process.env.DISCORD_AUTH_TIMEOUT_MINUTES || '5', 10);
-const TIMEOUT_MS         = TIMEOUT_MINUTES * 60 * 1000;
+const TIMEOUT_MINUTES        = parseInt(process.env.DISCORD_AUTH_TIMEOUT_MINUTES || '5', 10);
+const TIMEOUT_MS             = TIMEOUT_MINUTES * 60 * 1000;
+const RATE_LIMIT_TIMEOUT_MS  = 24 * 60 * 60 * 1000;
 
-let client = null;
+let client  = null;
 let pendingDecision = null;  // { resolve, timeoutId, messageRef }
+let expediteHandler    = null;  // registered by index.js via setExpediteHandler
+let pollerStateGetter  = null;  // registered by index.js via setPollerStateGetter
+let triggerPollFn      = null;  // registered by index.js via setTriggerPoll
 
 function isEnabled() {
   return INTERACTIVE_AUTH && !!client;
 }
+
+// Registers the callback invoked when the user clicks an Expedite button.
+// Wired in index.js to avoid a circular dependency between discord-bot and inbox-watcher.
+function setExpediteHandler(fn)   { expediteHandler   = fn; }
+function setPollerStateGetter(fn) { pollerStateGetter = fn; }
+function setTriggerPoll(fn)       { triggerPollFn     = fn; }
 
 // Call once at startup when DISCORD_INTERACTIVE_AUTH=true.
 // Returns a promise that resolves once the bot is ready (or rejects on bad token).
@@ -31,10 +41,49 @@ async function init() {
   // Lazy-require discord.js so non-interactive mode has zero overhead.
   const { Client, GatewayIntentBits } = require('discord.js');
 
-  client = new Client({ intents: [GatewayIntentBits.Guilds] });
+  client = new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.MessageContent,
+    ],
+  });
 
   client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
+
+    // ---- Per-item expedite (fire-and-forget, no pendingDecision involved) ----
+    if (interaction.customId.startsWith('research_expedite:')) {
+      const filename = interaction.customId.slice('research_expedite:'.length);
+      await interaction.deferUpdate().catch(() => {});
+      if (expediteHandler) {
+        try {
+          await expediteHandler(filename);
+          const displayName = filename.replace(/\.md$/, '').replace(/-/g, ' ');
+          await interaction.editReply({ content: `▶️ Expediting *${displayName}*…`, components: [] }).catch(() => {});
+        } catch (err) {
+          logger.warn(`discord-bot: expedite handler failed (${err.message})`);
+          await interaction.editReply({ content: '⚠️ Expedite failed — check bot logs.', components: [] }).catch(() => {});
+        }
+      } else {
+        await interaction.editReply({ content: '⚠️ Expedite handler not registered.', components: [] }).catch(() => {});
+      }
+      return;
+    }
+
+    // ---- Run now (advance next poll to immediately) -------------------------
+    if (interaction.customId === 'research_run_now') {
+      await interaction.deferUpdate().catch(() => {});
+      if (triggerPollFn) {
+        triggerPollFn();
+        await interaction.editReply({ content: '▶️ Poll triggered — running now.', components: [] }).catch(() => {});
+      } else {
+        await interaction.editReply({ content: '⚠️ Trigger not available.', components: [] }).catch(() => {});
+      }
+      return;
+    }
+
+    // ---- Auth / rate-limit decisions (block until user acts) -----------------
     if (!pendingDecision) {
       await interaction.reply({ content: 'No pending auth decision.', ephemeral: true }).catch(() => {});
       return;
@@ -55,6 +104,14 @@ async function init() {
       responseText = '💰 Using API key for this task.';
       await safeUpdate(interaction, responseText, []);
       resolve('use-api-key');
+    } else if (id === 'rate-limit-wait') {
+      responseText = '⏳ Holding until rate limit resets.';
+      await safeUpdate(interaction, responseText, []);
+      resolve('wait-for-reset');
+    } else if (id === 'rate-limit-api-key') {
+      responseText = '💰 Using API key for this task.';
+      await safeUpdate(interaction, responseText, []);
+      resolve('use-api-key');
     } else {
       // Unknown button — ignore
       await interaction.reply({ content: 'Unknown action.', ephemeral: true }).catch(() => {});
@@ -63,8 +120,101 @@ async function init() {
     }
   });
 
-  await client.login(BOT_TOKEN);
+  // ---- Text commands (!research hold / release / status) -------------------
+  // Requires "Message Content Intent" in the Discord developer portal.
+  client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+    if (message.channelId !== CHANNEL_ID) return;
+    const text = message.content.trim().toLowerCase();
+    if      (text === '!research help')    await handleHelpCommand(message);
+    else if (text === '!research hold')    await handleHoldCommand(message, true);
+    else if (text === '!research release') await handleHoldCommand(message, false);
+    else if (text === '!research status')  await handleStatusCommand(message);
+  });
+
+  // Wait for the `ready` event — login() only resolves when the auth request
+  // is sent, not when the gateway handshake completes. Calling channel.send()
+  // before ready causes silent failures.
+  await new Promise((resolve, reject) => {
+    client.once('ready', resolve);
+    client.login(BOT_TOKEN).catch(reject);
+  });
+
   logger.info('discord-bot: ready');
+}
+
+async function handleHelpCommand(message) {
+  const lines = [
+    '**rockybot — `!research` commands**',
+    '`!research help` — show this help',
+    '`!research status` — watcher busy state, gate status, time until next run (+ Run now button)',
+    '`!research hold` — pause all inbox research processing',
+    '`!research release` — resume inbox research processing',
+  ];
+  await message.reply(lines.join('\n')).catch(() => {});
+}
+
+async function handleHoldCommand(message, activate) {
+  const researchGate = require('./research-gate');
+  try {
+    if (activate && researchGate.isHoldActive()) {
+      await message.reply('Research is already on hold.').catch(() => {});
+      return;
+    }
+    if (!activate && !researchGate.isHoldActive()) {
+      await message.reply('Research is not currently on hold.').catch(() => {});
+      return;
+    }
+    await researchGate.setHold(activate);
+    const reply = activate
+      ? 'Research processing paused. Use `!research release` to resume.'
+      : 'Research processing resumed.';
+    await message.reply(reply).catch(() => {});
+    logger.info(`discord-bot: research hold ${activate ? 'activated' : 'released'} via Discord`);
+  } catch (err) {
+    logger.warn(`discord-bot: hold command failed (${err.message})`);
+    await message.reply('Failed to update hold state — check bot logs.').catch(() => {});
+  }
+}
+
+async function handleStatusCommand(message) {
+  const researchGate = require('./research-gate');
+  const holdActive = researchGate.isHoldActive();
+  const gateReason = researchGate.researchGateReason();
+  const holdLine   = holdActive ? '🔴 Hold: **active**' : '🟢 Hold: inactive';
+  const gateLine   = gateReason ? `Gate: \`${gateReason}\`` : 'Gate: clear';
+
+  const state = pollerStateGetter ? pollerStateGetter() : null;
+  const busyLine = state
+    ? (state.isRunning ? '🔄 Watcher: **running**' : '⚙️ Watcher: idle')
+    : '';
+  const nextLine = (state && state.nextPollTime)
+    ? `⏱ Next run: in ${formatCountdown(state.nextPollTime - Date.now())}`
+    : '';
+
+  const lines = [holdLine, gateLine, busyLine, nextLine].filter(Boolean);
+
+  // Add "Run now" button only when interactive mode is active
+  if (client) {
+    const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('research_run_now')
+        .setLabel('▶️ Run now')
+        .setStyle(ButtonStyle.Primary),
+    );
+    await message.reply({ content: lines.join('\n'), components: [row] }).catch(() => {});
+  } else {
+    await message.reply(lines.join('\n')).catch(() => {});
+  }
+}
+
+function formatCountdown(ms) {
+  if (ms <= 0) return 'now';
+  const totalSec = Math.ceil(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
 // Posts an auth decision message to DISCORD_CHANNEL_ID and waits for the user
@@ -76,7 +226,6 @@ async function askAuthDecision(label, oauthUrl, loginProc) {
 
   try {
     const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-
     const channel = await client.channels.fetch(CHANNEL_ID);
 
     const row = new ActionRowBuilder().addComponents(
@@ -134,4 +283,92 @@ async function safeUpdate(interaction, content, components) {
   }
 }
 
-module.exports = { init, isEnabled, askAuthDecision };
+// Posts a rate-limit decision message to Discord and waits for the user to choose
+// "Wait for reset" or "Use API Key".  Times out after 24h (falls back to API key).
+// Returns: 'wait-for-reset' | 'use-api-key'
+// Never rejects — errors fall back to 'use-api-key'.
+async function askRateLimitDecision(label, resetTime) {
+  if (!client) return 'use-api-key';
+
+  try {
+    const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+    const channel = await client.channels.fetch(CHANNEL_ID);
+
+    const resetStr = resetTime
+      ? `Resets at **${resetTime.toUTCString()}**.`
+      : 'Reset time unknown — will retry every 30 minutes.';
+    const taskLine = label ? `\n**Task:** *${label}*` : '';
+    const content = [
+      `⏳ **rockybot: Claude usage limit reached**${taskLine}`,
+      resetStr,
+      `Bot will hold until reset. Click to override with API key (charges apply).`,
+    ].join('\n');
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('rate-limit-wait')
+        .setLabel('⏳ Wait for reset')
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId('rate-limit-api-key')
+        .setLabel('💰 Use API Key')
+        .setStyle(ButtonStyle.Danger),
+    );
+
+    const msg = await channel.send({ content, components: [row] });
+
+    return await new Promise((resolve) => {
+      const timeoutId = setTimeout(async () => {
+        if (!pendingDecision) return;
+        pendingDecision = null;
+        await msg.edit({ content: `⏱️ No response after 24h — falling back to API key.`, components: [] }).catch(() => {});
+        resolve('use-api-key');
+      }, RATE_LIMIT_TIMEOUT_MS);
+
+      pendingDecision = { resolve, timeoutId, messageRef: msg };
+    });
+
+  } catch (err) {
+    logger.warn(`discord-bot: askRateLimitDecision failed (${err.message}) — falling back to API key`);
+    return 'use-api-key';
+  }
+}
+
+// Sends a fire-and-forget notification for a new inbox item queued during quiet hours.
+// Includes an Expedite button so the user can promote the item immediately.
+// Never rejects.
+async function notifyQuietHoursItem(filename) {
+  if (!client) return;
+  try {
+    const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+    const channel     = await client.channels.fetch(CHANNEL_ID);
+    const displayName = filename.replace(/\.md$/, '').replace(/-/g, ' ');
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`research_expedite:${filename}`)
+        .setLabel('▶️ Run now')
+        .setStyle(ButtonStyle.Primary),
+    );
+
+    await channel.send({
+      content: `📥 **Research queued** (quiet hours active): *${displayName}*\nClick to run immediately.`,
+      components: [row],
+    });
+  } catch (err) {
+    logger.warn(`discord-bot: notifyQuietHoursItem failed (${err.message})`);
+  }
+}
+
+// Posts a plain startup message to the bot channel. Never throws.
+async function broadcastStartup(version) {
+  if (!client) return;
+  try {
+    const ch = await client.channels.fetch(CHANNEL_ID);
+    await ch.send(`🤖 **rockybot v${version}** started — online and polling.`);
+  } catch (err) {
+    logger.warn(`discord-bot: broadcastStartup failed (${err.message})`);
+  }
+}
+
+module.exports = { init, isEnabled, setExpediteHandler, setPollerStateGetter, setTriggerPoll, askAuthDecision, askRateLimitDecision, notifyQuietHoursItem, broadcastStartup };
