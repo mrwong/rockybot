@@ -82,11 +82,20 @@ function runBuild(vaultPath, quartzOutput) {
       `---\ntitle: Research\n---\n\n# Research\n\n${renderRootIndex(topics)}\n`
     );
 
+    // Quartz v4.5+ removes the --output directory itself (rmdir) before each
+    // build. quartzOutput is a bind-mount whose parent is root-owned, so rmdir
+    // on it fails EACCES for our uid (we can write inside it, but not remove
+    // it). Build into a container-local staging dir Quartz can freely recreate,
+    // then rsync the result into the mounted output dir. Bonus: publishing is
+    // now an atomic sync into a populated dir rather than empty-then-rebuild.
+    const stageDir = '/tmp/quartz-build';
     logger.info('Running quartz build');
-    execSync(`npx quartz build --output ${quartzOutput}`, {
+    execSync(`npx quartz build --output ${stageDir}`, {
       cwd: QUARTZ_SRC,
       stdio: 'inherit',
     });
+    logger.info('Publishing build → output dir');
+    execSync(`rsync -a --delete ${stageDir}/ ${quartzOutput}/`, { stdio: 'inherit' });
 
     // NFS ACLs strip world-readable bits; restore them so nginx can serve the files
     execSync(`chmod -R o+r ${quartzOutput}`, { stdio: 'inherit' });
