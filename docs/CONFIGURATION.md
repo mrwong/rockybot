@@ -102,5 +102,9 @@ All four Twilio vars must be set for WhatsApp notifications to send. Any missing
 |---|---|---|
 | `DOMAIN_NAME` | `localhost` | Domain used to configure the Quartz static site base URL. Set to your domain, e.g. `notes.example.com`. |
 | `QUARTZ_OUTPUT` | `/quartz-output` | Path inside the bridge container where Quartz builds the static site. Must match the volume mount for notes-web. |
+| `REBUILD_DEBOUNCE_MS` | `3000` | Quiet period (ms) after the last vault `.md` change before a rebuild is considered. Raise it (e.g. `60000`) to batch bursts of writes. |
+| `REBUILD_MAX_WAIT_MS` | `0` (off) | Longest (ms) a continuous burst of changes may postpone a rebuild. `0` means no limit. |
 | `GARDEN_OUTPUT` | unset | Enables the public **garden** build. Path inside the bridge container where a second Quartz site, containing only topics with both `publish: true` and `public: true` in their `index.md` frontmatter, is written. Unset = no garden activity at all. Mount a folder here and serve it with a separate, unauthenticated web server. |
 | `GARDEN_SUBDOMAIN` | `garden` | Garden base URL is `<GARDEN_SUBDOMAIN>.<DOMAIN_NAME>` (the private site stays `notes.<DOMAIN_NAME>`). |
+
+The bridge only runs Quartz (and only writes to `QUARTZ_OUTPUT`) when the published content actually changed: edits to notes outside `publish: true` topics are ignored. The first build after a restart always runs. When a build runs, unchanged output files are left untouched.

@@ -5,19 +5,25 @@ const path = require('path');
 const fs = require('fs-extra');
 const logger = require('./logger');
 const { injectExportUI } = require('./export-ui');
+const { fingerprintDir, createBuildGate, publishStage, debounceConfig, writeIfChanged } = require('./build-support');
 const { runGardenBuild } = require('./garden-builder');
 
-const QUARTZ_SRC = '/quartz-src';
-const DEBOUNCE_MS = 3000;
+const DEFAULT_QUARTZ_SRC = '/quartz-src';
 
 let timer = null;
+let firstEventAt = null;
+const gate = createBuildGate();
 
 function scheduleRebuild(vaultPath, quartzOutput) {
+  const { debounceMs, maxWaitMs } = debounceConfig();
+  const now = Date.now();
   if (timer) clearTimeout(timer);
+  else firstEventAt = now;
+  const wait = maxWaitMs > 0 ? Math.max(0, Math.min(debounceMs, firstEventAt + maxWaitMs - now)) : debounceMs;
   timer = setTimeout(() => {
     timer = null;
     runAllBuilds(vaultPath, quartzOutput);
-  }, DEBOUNCE_MS);
+  }, wait);
 }
 
 // Private (notes.) build first, then the optional public garden build. Each is
@@ -53,7 +59,8 @@ function getPublishedTopics(vaultPath) {
   return published;
 }
 
-function runBuild(vaultPath, quartzOutput) {
+function runBuild(vaultPath, quartzOutput, opts = {}) {
+  const QUARTZ_SRC = opts.quartzSrc || DEFAULT_QUARTZ_SRC;
   try {
     const topics = getPublishedTopics(vaultPath);
     if (topics.length === 0) {
@@ -80,13 +87,13 @@ function runBuild(vaultPath, quartzOutput) {
     ].join(' ');
     logger.info('Syncing published topics → quartz content dir');
     execSync(
-      `rsync -a --delete ${includes} --exclude='*' ${vaultPath}/research/ ${QUARTZ_SRC}/content/`,
+      `rsync -a --delete --delete-excluded ${includes} --exclude='*' ${vaultPath}/research/ ${QUARTZ_SRC}/content/`,
       { stdio: 'inherit' }
     );
 
     // Generate a root index so Quartz produces index.html at the site root.
     // Mirrors the PARA directory shape so deeply nested topics are findable.
-    fs.outputFileSync(
+    writeIfChanged(
       path.join(QUARTZ_SRC, 'content', 'index.md'),
       `---\ntitle: Research\n---\n\n# Research\n\n${renderRootIndex(topics)}\n`
     );
@@ -97,21 +104,28 @@ function runBuild(vaultPath, quartzOutput) {
     // it). Build into a container-local staging dir Quartz can freely recreate,
     // then rsync the result into the mounted output dir. Bonus: publishing is
     // now an atomic sync into a populated dir rather than empty-then-rebuild.
-    const stageDir = '/tmp/quartz-build';
+    const stageDir = opts.stageDir || '/tmp/quartz-build';
+    // Skip when the published content (files + topic set + generated index) is
+    // identical to the last successful build; leaves the output untouched.
+    const contentFp = fingerprintDir(path.join(QUARTZ_SRC, 'content'));
+    if (!gate.needsBuild(contentFp)) {
+      logger.info('Published content unchanged — skipping Quartz build');
+      return;
+    }
     logger.info('Running quartz build');
-    execSync(`npx quartz build --output ${stageDir}`, {
+    if (opts.runQuartz) opts.runQuartz(stageDir);
+    else execSync(`npx quartz build --output ${stageDir}`, {
       cwd: QUARTZ_SRC,
       stdio: 'inherit',
     });
+
+    // Inject the multi-topic export selector into the staged root index, so the
+    // published copy is final and a checksum publish does not rewrite it twice.
+    injectExportUI(stageDir, topics);
+
     logger.info('Publishing build → output dir');
-    execSync(`rsync -a --delete ${stageDir}/ ${quartzOutput}/`, { stdio: 'inherit' });
-
-    // NFS ACLs strip world-readable bits; restore them so nginx can serve the files
-    execSync(`chmod -R o+r ${quartzOutput}`, { stdio: 'inherit' });
-    execSync(`find ${quartzOutput} -type d -exec chmod o+x {} +`, { stdio: 'inherit' });
-
-    // Inject the multi-topic export selector into the built root index.
-    injectExportUI(quartzOutput, topics);
+    publishStage(stageDir, quartzOutput);
+    gate.markBuilt(contentFp);
 
     fs.outputFileSync(path.join(quartzOutput, '.last-built'), new Date().toISOString());
     logger.info('Quartz build complete');
