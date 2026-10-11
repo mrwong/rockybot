@@ -183,6 +183,8 @@ The key difference from a single-topic export: **links between topics you includ
 
 **Security:** Only published topics (`publish: true` in `index.md`) can be exported. The export endpoint validates every requested slug against the current publish list on every request — revoking `publish: true` immediately blocks exports, even before the Quartz rebuild completes. A multi-topic request is all-or-nothing (any unpublished or unbuilt slug rejects the whole request) and is capped at 25 topics.
 
+**Publishing flags:** new topics are written with `publish: false` and `public: false`. `publish: true` puts a topic on your private notes site; the topic also appears on the public garden site only if you additionally set `public: true` yourself (see `docs/CONFIGURATION.md`, `GARDEN_OUTPUT`). Claude never sets either flag to `true`.
+
 ---
 
 ## Output structure
