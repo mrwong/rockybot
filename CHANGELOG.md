@@ -2,6 +2,12 @@
 
 All notable changes to rockybot are documented here. Version numbers follow [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`. Documentation-only changes do not increment the version.
 
+## [Unreleased]
+
+### Added
+
+- **Public garden site (obsidian-bridge).** Set `GARDEN_OUTPUT` to build a second Quartz site containing only topics whose `index.md` frontmatter has **both** `publish: true` and `public: true` (`public: true` alone is not enough and logs a warning). Flags are read from the YAML frontmatter block only; anything missing or malformed is not public. A nested topic is included only if it is itself public (a public parent never implies a public child; a public child under a non-public parent is published at its real path without the parent's files). Plain subfolders of a public topic are included; symlinks and dotfiles are never copied. The garden uses its own content dir (`/tmp/garden-content`, via `quartz build -d`) and staging dir, has its own root index with no export links, and gets base URL `garden.$DOMAIN_NAME` (override with `GARDEN_SUBDOMAIN`) through an env override read by `quartz.config.ts`. The garden build is skipped when the public content fingerprint is unchanged, so private edits cause no garden build or write; with zero public topics the output becomes an empty placeholder site. Garden and private builds are independent (a failure in one does not stop the other). With `GARDEN_OUTPUT` unset nothing changes. New module `services/obsidian-bridge/src/garden-builder.js`; offline tests in `tests/unit/garden-builder.test.js`.
+
 ## [1.7.0] — 2026-06-09
 
 ### Added

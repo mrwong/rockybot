@@ -102,3 +102,5 @@ All four Twilio vars must be set for WhatsApp notifications to send. Any missing
 |---|---|---|
 | `DOMAIN_NAME` | `localhost` | Domain used to configure the Quartz static site base URL. Set to your domain, e.g. `notes.example.com`. |
 | `QUARTZ_OUTPUT` | `/quartz-output` | Path inside the bridge container where Quartz builds the static site. Must match the volume mount for notes-web. |
+| `GARDEN_OUTPUT` | unset | Enables the public **garden** build. Path inside the bridge container where a second Quartz site, containing only topics with both `publish: true` and `public: true` in their `index.md` frontmatter, is written. Unset = no garden activity at all. Mount a folder here and serve it with a separate, unauthenticated web server. |
+| `GARDEN_SUBDOMAIN` | `garden` | Garden base URL is `<GARDEN_SUBDOMAIN>.<DOMAIN_NAME>` (the private site stays `notes.<DOMAIN_NAME>`). |
