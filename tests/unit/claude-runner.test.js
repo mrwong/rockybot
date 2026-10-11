@@ -232,6 +232,22 @@ describe('subscription mode: unrecognized error', () => {
     await expect(runClaude('prompt', '/tmp', {})).rejects.toThrow('claude (subscription) failed');
     expect(spawn).toHaveBeenCalledTimes(1);
   });
+
+  it('includes stdout in the error when stderr is empty', async () => {
+    const { runClaude, spawn } = freshRequires({ CLAUDE_SUBSCRIPTION_MODE: 'true' });
+    spawn.mockImplementationOnce(() => fakeProc({ exitCode: 1, stdout: 'model declined to continue', stderr: '' }));
+
+    await expect(runClaude('prompt', '/tmp', {})).rejects.toThrow('claude (subscription) failed: model declined to continue');
+  });
+
+  it('emits a placeholder when both stderr and stdout are empty', async () => {
+    const { runClaude, spawn } = freshRequires({ CLAUDE_SUBSCRIPTION_MODE: 'true' });
+    spawn
+      .mockImplementationOnce(() => fakeProc({ exitCode: 1, stdout: '', stderr: '' }))
+      .mockImplementationOnce(() => fakeProc({ exitCode: 1, stdout: '', stderr: '' }));
+
+    await expect(runClaude('prompt', '/tmp', {})).rejects.toThrow('(no output captured; non-zero exit)');
+  });
 });
 
 // ---------------------------------------------------------------------------

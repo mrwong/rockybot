@@ -94,6 +94,13 @@ function spawnClaude(prompt, cwd, { budgetUsd, tools, model, useApiKey }) {
 // posts the OAuth URL to Discord, and waits for the user to decide.
 // In basic mode: fires a throttled Discord alert and falls back immediately.
 // Returns 'use-api-key' | 'retry-subscription'.
+// claude --print can put its message on stdout with an empty stderr (e.g. the model
+// declines mid-print), so fall back to stdout and never emit a blank detail.
+function failureDetail(r) {
+  const detail = ((r.stderr || '').trim() || (r.stdout || '').trim()).slice(0, 300);
+  return detail || '(no output captured; non-zero exit)';
+}
+
 async function handleAuthFailure(label) {
   if (discordBot.isEnabled()) {
     logger.warn('claude-runner: subscription auth failed — starting OAuth flow, posting to Discord');
@@ -159,7 +166,7 @@ async function handleRateLimitFailure(label, stderr, stdout, retryFn) {
 
     const type = classifyOutput(result.stderr, result.stdout);
     if (type !== 'rate-limit') {
-      throw new Error(`claude (after rate limit hold) failed: ${result.stderr.slice(0, 300)}`);
+      throw new Error(`claude (after rate limit hold) failed: ${failureDetail(result)}`);
     }
     // Still limited — refresh reset time and loop
     currentResetTime = parseResetTime(result.stderr + '\n' + result.stdout) || currentResetTime;
@@ -205,7 +212,7 @@ async function runClaude(prompt, cwd, { budgetUsd = '2.00', tools = 'Bash,Edit,R
         logger.info('claude-runner: retrying with subscription billing after re-auth');
         const retry = await spawnClaude(prompt, cwd, { ...opts, useApiKey: false });
         if (retry.ok) return;
-        throw new Error(`claude (subscription retry) failed: ${retry.stderr.slice(0, 300)}`);
+        throw new Error(`claude (subscription retry) failed: ${failureDetail(retry)}`);
       }
 
       // decision === 'use-api-key' — fall through to API key path below
@@ -219,17 +226,17 @@ async function runClaude(prompt, cwd, { budgetUsd = '2.00', tools = 'Bash,Edit,R
       // outcome === 'use-api-key' — fall through
 
     } else {
-      throw new Error(`claude (subscription) failed: ${result.stderr.slice(0, 300)}`);
+      throw new Error(`claude (subscription) failed: ${failureDetail(result)}`);
     }
 
     logger.info('claude-runner: retrying with API key billing');
     const fallback = await spawnClaude(prompt, cwd, { ...opts, useApiKey: true });
-    if (!fallback.ok) throw new Error(`claude (api fallback) failed: ${fallback.stderr.slice(0, 300)}`);
+    if (!fallback.ok) throw new Error(`claude (api fallback) failed: ${failureDetail(fallback)}`);
     return;
   }
 
   const result = await spawnClaude(prompt, cwd, { ...opts, useApiKey: true });
-  if (!result.ok) throw new Error(`claude failed: ${result.stderr.slice(0, 300)}`);
+  if (!result.ok) throw new Error(`claude failed: ${failureDetail(result)}`);
 }
 
 module.exports = { runClaude };
