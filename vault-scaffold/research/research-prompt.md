@@ -81,6 +81,7 @@ might be 4–5 cross-linked pages.
 tags: [research, <topic-tags>]
 created: <today's date YYYY-MM-DD>
 publish: false
+public: false
 model: {{MODEL}}
 related: ["[[other-note]]", "[[research/other-topic/index]]"]
 sources:
