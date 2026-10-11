@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs-extra');
 const logger = require('./logger');
 const { injectExportUI } = require('./export-ui');
+const { runGardenBuild } = require('./garden-builder');
 
 const QUARTZ_SRC = '/quartz-src';
 const DEBOUNCE_MS = 3000;
@@ -15,8 +16,16 @@ function scheduleRebuild(vaultPath, quartzOutput) {
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => {
     timer = null;
-    runBuild(vaultPath, quartzOutput);
+    runAllBuilds(vaultPath, quartzOutput);
   }, DEBOUNCE_MS);
+}
+
+// Private (notes.) build first, then the optional public garden build. Each is
+// independent: both catch their own errors, so one failing never blocks the other.
+// The garden is a no-op unless GARDEN_OUTPUT is set.
+function runAllBuilds(vaultPath, quartzOutput) {
+  runBuild(vaultPath, quartzOutput);
+  runGardenBuild(vaultPath);
 }
 
 function getPublishedTopics(vaultPath) {
@@ -179,4 +188,4 @@ function renderRootIndex(topics) {
   return lines.join('\n');
 }
 
-module.exports = { scheduleRebuild, runBuild, getPublishedTopics, renderRootIndex };
+module.exports = { scheduleRebuild, runBuild, runAllBuilds, getPublishedTopics, renderRootIndex };
