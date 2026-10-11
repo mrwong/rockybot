@@ -7,7 +7,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const chokidar = require('chokidar');
 const logger = require('./logger');
-const { scheduleRebuild, runBuild } = require('./quartz-builder');
+const { scheduleRebuild, runAllBuilds } = require('./quartz-builder');
 const { createExportServer } = require('./http-server');
 
 const VAULT_PATH    = process.env.VAULT_PATH    || '/vault';
@@ -22,9 +22,12 @@ function configureQuartz() {
   }
   let config = fs.readFileSync(configPath, 'utf8');
   const domain = process.env.DOMAIN_NAME || 'localhost';
+  // The private build uses notes.<domain>. The garden build sets
+  // QUARTZ_BASE_URL_OVERRIDE for its own quartz process only (Quartz has no
+  // baseUrl CLI flag); with it unset the value is exactly notes.<domain> as before.
   config = config.replace(
-    /baseUrl:\s*["'][^"']*["']/,
-    `baseUrl: "notes.${domain}"`
+    /baseUrl:\s*(?:process\.env\.QUARTZ_BASE_URL_OVERRIDE\s*\|\|\s*)?["'][^"']*["']/,
+    `baseUrl: process.env.QUARTZ_BASE_URL_OVERRIDE || "notes.${domain}"`
   );
   // Ensure .obsidian is ignored
   if (!config.includes('.obsidian')) {
@@ -55,12 +58,16 @@ async function main() {
 
   await fs.ensureDir(VAULT_PATH);
   await fs.ensureDir(QUARTZ_OUTPUT);
+  if (process.env.GARDEN_OUTPUT) {
+    await fs.ensureDir(process.env.GARDEN_OUTPUT);
+    logger.info(`Garden enabled → ${process.env.GARDEN_OUTPUT} (${process.env.GARDEN_SUBDOMAIN || "garden"}.${process.env.DOMAIN_NAME || "localhost"})`);
+  }
 
   createExportServer(3001, QUARTZ_OUTPUT, VAULT_PATH);
   logger.info('Export server listening on :3001');
 
   // Initial build from whatever is already in the vault
-  runBuild(VAULT_PATH, QUARTZ_OUTPUT);
+  runAllBuilds(VAULT_PATH, QUARTZ_OUTPUT);
 
   const watcher = chokidar.watch(VAULT_PATH, {
     ignored: /(^|[/\\])\.|tasks\/(pending|done)/,
