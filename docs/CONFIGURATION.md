@@ -102,3 +102,7 @@ All four Twilio vars must be set for WhatsApp notifications to send. Any missing
 |---|---|---|
 | `DOMAIN_NAME` | `localhost` | Domain used to configure the Quartz static site base URL. Set to your domain, e.g. `notes.example.com`. |
 | `QUARTZ_OUTPUT` | `/quartz-output` | Path inside the bridge container where Quartz builds the static site. Must match the volume mount for notes-web. |
+| `REBUILD_DEBOUNCE_MS` | `3000` | Quiet period (ms) after the last vault `.md` change before a rebuild is considered. Raise it (e.g. `60000`) to batch bursts of writes. |
+| `REBUILD_MAX_WAIT_MS` | `0` (off) | Longest (ms) a continuous burst of changes may postpone a rebuild. `0` means no limit. |
+
+The bridge only runs Quartz (and only writes to `QUARTZ_OUTPUT`) when the published content actually changed: edits to notes outside `publish: true` topics are ignored. The first build after a restart always runs. When a build runs, unchanged output files are left untouched.
